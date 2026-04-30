@@ -1,0 +1,483 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#1e293b">
+<title>שבילי ישראל</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
+<style>
+* { box-sizing:border-box; margin:0; padding:0; -webkit-tap-highlight-color:transparent; }
+html,body { height:100dvh; overflow:hidden; font-family:'Segoe UI','Arial Hebrew',Arial,sans-serif; background:#0f172a; }
+#app { display:flex; flex-direction:column; height:100dvh; }
+
+/* Topbar */
+#topbar {
+  display:flex; align-items:center; gap:8px;
+  padding:0 12px; height:52px; padding-top:env(safe-area-inset-top);
+  background:#1e293b; border-bottom:1px solid #334155; flex-shrink:0; z-index:2000;
+}
+.logo { font-size:16px; font-weight:800; color:#f8fafc; display:flex; align-items:center; gap:6px; }
+.logo em { color:#34d399; font-style:normal; }
+.spacer { flex:1; }
+.topbtn {
+  display:flex; align-items:center; gap:5px; padding:6px 10px;
+  border-radius:8px; border:1px solid #334155; background:transparent;
+  color:#94a3b8; font-size:12px; font-weight:600; cursor:pointer; font-family:inherit;
+}
+.topbtn:active { background:#334155; }
+
+/* Map */
+#map-container { flex:1; position:relative; overflow:hidden; margin-bottom:68px; }
+#map { width:100%; height:100%; }
+
+/* Bottom bar */
+#bottom-bar {
+  position:absolute; bottom:0; left:0; right:0; z-index:2000;
+  background:#1e293b; border-top:1px solid #334155;
+  display:flex; align-items:center; justify-content:space-around;
+  padding:8px 6px; padding-bottom:calc(8px + env(safe-area-inset-bottom));
+  height:68px;
+}
+.bbt {
+  display:flex; flex-direction:column; align-items:center; gap:3px;
+  padding:6px 10px; border-radius:10px; border:1px solid #334155;
+  background:transparent; color:#94a3b8; font-size:10px; font-weight:600;
+  cursor:pointer; min-width:52px; font-family:inherit;
+  transition:background 0.1s, border-color 0.1s;
+}
+.bbt:active { transform:scale(0.93); }
+.bbt.pan-active  { background:#1e3a8a; border-color:#3b82f6; color:#bfdbfe; }
+.bbt.free-active { background:#1e3a8a; border-color:#60a5fa; color:#dbeafe; }
+.bbt.snap-active { background:#14532d; border-color:#4ade80; color:#bbf7d0; }
+
+/* Floating panels */
+.fp {
+  position:absolute; z-index:1000;
+  background:rgba(15,23,42,0.93); border:1px solid #334155;
+  border-radius:12px; backdrop-filter:blur(10px);
+}
+
+#layer-panel { top:10px; left:10px; padding:10px; min-width:148px; }
+.pt { font-size:10px; font-weight:700; color:#64748b; text-transform:uppercase;
+  letter-spacing:.1em; margin-bottom:8px; }
+.lr { display:flex; align-items:center; gap:8px; padding:5px 3px; border-radius:6px; cursor:pointer; }
+.lr:active { background:rgba(255,255,255,0.07); }
+.lr input { accent-color:#34d399; width:15px; height:15px; cursor:pointer; flex-shrink:0; }
+.lr label { font-size:12px; color:#cbd5e1; cursor:pointer; user-select:none; }
+.lsep { height:1px; background:#1e293b; margin:5px 0; }
+
+#snap-panel { top:10px; right:10px; padding:10px 13px; font-size:12px; color:#94a3b8; max-width:190px; display:none; }
+#snap-panel.on { display:block; }
+#snap-ttl { font-weight:700; color:#e2e8f0; margin-bottom:3px; font-size:13px; }
+
+#route-panel { bottom:10px; right:10px; padding:12px 16px; display:none; min-width:130px; }
+.rl { font-size:11px; color:#64748b; }
+.rv { font-size:26px; font-weight:800; color:#f8fafc; line-height:1.1; }
+.rp { font-size:11px; color:#64748b; margin-top:2px; }
+
+/* GPS */
+#gps-btn {
+  position:absolute; bottom:10px; left:10px; z-index:1000;
+  width:42px; height:42px; border-radius:50%;
+  background:rgba(15,23,42,0.93); border:1px solid #334155;
+  display:flex; align-items:center; justify-content:center;
+  cursor:pointer; color:#94a3b8;
+}
+#gps-btn.on { color:#34d399; border-color:#34d399; }
+#gps-btn:active { transform:scale(0.91); }
+
+/* Status */
+#statusbar {
+  position:absolute; bottom:10px; left:58px; right:10px; z-index:1000;
+  background:rgba(15,23,42,0.88); border:1px solid #334155; border-radius:999px;
+  padding:5px 14px; font-size:12px; color:#94a3b8;
+  pointer-events:none; text-align:center; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+}
+
+/* Legend */
+#legend { bottom:10px; left:10px; padding:9px 11px; display:none; }
+.leg { display:flex; align-items:center; gap:7px; margin-bottom:4px; font-size:11px; color:#94a3b8; }
+.leg:last-child { margin-bottom:0; }
+.ll { width:22px; height:4px; border-radius:2px; flex-shrink:0; }
+.ld { width:22px; height:4px; flex-shrink:0; background:repeating-linear-gradient(90deg,#f59e0b 0 6px,transparent 6px 9px); }
+
+/* Install banner */
+#install-banner {
+  display:none; align-items:center; gap:8px; padding:8px 12px;
+  background:#134e4a; border-bottom:1px solid #0d9488;
+  font-size:13px; color:#ccfbf1; z-index:3000; flex-shrink:0;
+}
+#install-banner button {
+  padding:4px 12px; border-radius:6px; background:#0d9488; border:none;
+  color:#fff; font-weight:600; cursor:pointer; font-family:inherit; font-size:12px;
+}
+.xbtn { background:transparent!important; border:1px solid #0d9488!important; color:#99f6e4!important; margin-right:auto; }
+
+/* Leaflet dark */
+.leaflet-control-zoom a { background:rgba(15,23,42,0.93)!important; color:#e2e8f0!important; border-color:#334155!important; width:36px!important; height:36px!important; line-height:36px!important; font-size:18px!important; }
+.leaflet-control-zoom { border:none!important; margin-bottom:8px!important; }
+.leaflet-control-attribution { background:rgba(15,23,42,0.7)!important; color:#475569!important; font-size:10px; }
+</style>
+</head>
+<body>
+<div id="app">
+
+  <div id="install-banner">
+    <span>📲 התקן כאפליקציה</span>
+    <button id="ibtn">התקן</button>
+    <button class="xbtn" onclick="document.getElementById('install-banner').style.display='none'">✕</button>
+  </div>
+
+  <div id="topbar">
+    <div class="logo">🥾 <em>שבילי ישראל</em></div>
+    <div class="spacer"></div>
+    <button class="topbtn" onclick="exportGPX()">
+      <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M8 2v9M4 7l4 4 4-4M2 13h12"/></svg>
+      GPX
+    </button>
+  </div>
+
+  <div id="map-container">
+    <div id="map"></div>
+
+    <div class="fp" id="layer-panel">
+      <div class="pt">שכבות</div>
+      <div class="lr" onclick="toggleLayer('ihm')"><input type="checkbox" id="c-ihm" checked><label for="c-ihm">🥾 Israel Hiking</label></div>
+      <div class="lr" onclick="toggleLayer('topo')"><input type="checkbox" id="c-topo"><label for="c-topo">🗺 OpenTopo</label></div>
+      <div class="lsep"></div>
+      <div class="lr" onclick="toggleLayer('trails')"><input type="checkbox" id="c-trails"><label for="c-trails">🔴 שבילים</label></div>
+      <div class="lr" onclick="toggleLayer('sat')"><input type="checkbox" id="c-sat"><label for="c-sat">🛰 לוויין</label></div>
+      <div class="lsep"></div>
+      <div class="lr" onclick="toggleLegend()"><input type="checkbox" id="c-leg"><label for="c-leg">מקרא</label></div>
+    </div>
+
+    <div class="fp" id="snap-panel">
+      <div id="snap-ttl">Snap to Trail</div>
+      <div id="snap-msg">גע ליד שביל</div>
+    </div>
+
+    <div id="gps-btn" onclick="toggleGPS()">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/>
+      </svg>
+    </div>
+
+    <div class="fp" id="route-panel">
+      <div class="rl">אורך מסלול</div>
+      <div class="rv" id="rdist">0.0</div>
+      <div class="rp" id="rpts">ק"מ</div>
+    </div>
+
+    <div class="fp" id="legend">
+      <div class="leg"><div class="ll" style="background:#e63946"></div>שביל אדום</div>
+      <div class="leg"><div class="ll" style="background:#2563eb"></div>שביל כחול</div>
+      <div class="leg"><div class="ll" style="background:#16a34a"></div>שביל ירוק</div>
+      <div class="leg"><div class="ld"></div>שביל ישראל</div>
+    </div>
+
+    <div id="statusbar">בחר מצב ציור</div>
+  </div>
+
+  <div id="bottom-bar">
+    <button class="bbt pan-active" id="btn-pan" onclick="setMode('pan')">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 9l-3 3 3 3M9 5l3-3 3 3M15 19l-3 3-3-3M19 9l3 3-3 3"/><circle cx="12" cy="12" r="2" fill="currentColor" stroke="none"/></svg>
+      תצוגה
+    </button>
+    <button class="bbt" id="btn-free" onclick="setMode('free')">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 20L7 7l5 5 7-10"/></svg>
+      חופשי
+    </button>
+    <button class="bbt" id="btn-snap" onclick="setMode('snap')">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 20c3-6 5-9 9-9s6 4 9-6"/><circle cx="12" cy="12" r="2.5" fill="currentColor" stroke="none"/></svg>
+      Snap
+    </button>
+    <button class="bbt" onclick="undoLast()">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 12H14a5 5 0 0 1 0 10H9"/><path d="M4 12L8 8M4 12l4 4"/></svg>
+      בטל
+    </button>
+    <button class="bbt" onclick="clearRoute()">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"/></svg>
+      נקה
+    </button>
+  </div>
+
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script>
+// ── PWA install ──────────────────────────────────────────
+let deferredPrompt = null;
+window.addEventListener('beforeinstallprompt', e => {
+  e.preventDefault(); deferredPrompt = e;
+  document.getElementById('install-banner').style.display = 'flex';
+});
+document.getElementById('ibtn').onclick = async () => {
+  if (!deferredPrompt) return;
+  deferredPrompt.prompt();
+  await deferredPrompt.userChoice;
+  deferredPrompt = null;
+  document.getElementById('install-banner').style.display = 'none';
+};
+
+// ── Service Worker ───────────────────────────────────────
+if ('serviceWorker' in navigator) {
+  // Inline service worker — לא צריך קובץ נפרד
+  const swCode = `
+const CACHE = 'shvilim-v1';
+const ASSETS = [location.href];
+self.addEventListener('install', e => {
+  e.waitUntil(caches.open(CACHE).then(c => c.addAll(ASSETS)));
+});
+self.addEventListener('fetch', e => {
+  e.respondWith(caches.match(e.request).then(r => r || fetch(e.request)));
+});`;
+  const blob = new Blob([swCode], {type:'application/javascript'});
+  navigator.serviceWorker.register(URL.createObjectURL(blob)).catch(()=>{});
+}
+
+// ── Overpass fetch ───────────────────────────────────────
+const SERVERS = [
+  'https://overpass-api.de/api/interpreter',
+  'https://overpass.kumi.systems/api/interpreter',
+  'https://overpass.osm.ch/api/interpreter',
+  'https://lz4.overpass-api.de/api/interpreter',
+];
+async function ovFetch(q) {
+  const opts = {method:'POST', headers:{'Content-Type':'application/x-www-form-urlencoded'},
+    body:'data='+encodeURIComponent(q), credentials:'omit'};
+  let lastErr;
+  for (const s of SERVERS) {
+    try { const r = await fetch(s,opts); if(r.ok) return await r.json(); }
+    catch(e) { lastErr=e; }
+  }
+  throw lastErr || new Error('כל שרתי Overpass נכשלו');
+}
+
+// ── State ────────────────────────────────────────────────
+let map, mode='pan';
+let pts=[], routeLine=null, dotMarkers=[], undoStack=[];
+let ihmL, topoL, trailsL, satL;
+let gpsMarker=null, gpsCircle=null, gpsOn=false, watchId=null;
+
+// ── Init ─────────────────────────────────────────────────
+function initMap() {
+  map = L.map('map', {center:[31.5,35.0], zoom:8, zoomControl:true, tap:true, tapTolerance:25});
+
+  ihmL = L.tileLayer('https://israelhiking.osm.org.il/Hebrew/Tiles/{z}/{x}/{y}.png',
+    {attribution:'© <a href="https://israelhiking.osm.org.il">Israel Hiking Map</a>', maxZoom:16});
+  ihmL.addTo(map);
+
+  topoL = L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png',
+    {attribution:'© OpenTopoMap', maxZoom:17, subdomains:'abc'});
+
+  trailsL = L.tileLayer('https://tile.waymarkedtrails.org/hiking/{z}/{x}/{y}.png',
+    {opacity:0.85, maxZoom:17});
+
+  satL = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+    {attribution:'Esri', maxZoom:19});
+
+  map.on('click', onMapClick);
+  setMode('pan');
+}
+
+function setMode(m) {
+  mode = m;
+  ['pan','free','snap'].forEach(id => {
+    const b=document.getElementById('btn-'+id);
+    if(b) b.className='bbt';
+  });
+  const sb = document.getElementById('btn-'+m);
+  if(sb) sb.classList.add(m+'-active');
+  const sp = document.getElementById('snap-panel');
+  if (m==='pan')  { map.dragging.enable();  map.getContainer().style.cursor='';           sp.classList.remove('on'); setStatus('גלול, זום וגע'); }
+  if (m==='free') { map.dragging.disable(); map.getContainer().style.cursor='crosshair';  sp.classList.remove('on'); setStatus('גע להוסיף נקודות'); }
+  if (m==='snap') { map.dragging.disable(); map.getContainer().style.cursor='crosshair';  sp.classList.add('on');    setStatus('גע ליד שביל'); setSnapMsg('גע על המפה'); }
+}
+
+async function onMapClick(e) {
+  if (mode==='pan') return;
+  if (mode==='free') { addPoint(e.latlng,'#60a5fa'); redraw('#60a5fa'); updateRP(); }
+  else await doSnap(e.latlng);
+}
+
+// ── Snap ─────────────────────────────────────────────────
+async function doSnap(clicked) {
+  setSnapMsg('🌐 מחפש שבילים...'); setStatus('שולח בקשה ל-OSM...');
+  const pb=pts.length, db=dotMarkers.length;
+  const snapped = await findSnap(clicked);
+
+  if (pts.length>0 && snapped) {
+    setSnapMsg('🗺 מנתב...');
+    const path = await routeAlong(pts[pts.length-1], snapped);
+    if (path && path.length>1) { for(let i=1;i<path.length;i++) pts.push(path[i]); addDot(snapped,'#4ade80'); }
+    else { pts.push(snapped); addDot(snapped,'#4ade80'); }
+  } else if (snapped) {
+    pts.push(snapped); addDot(snapped,'#4ade80');
+  } else {
+    pts.push(clicked); addDot(clicked,'#fbbf24');
+    redraw('#4ade80'); updateRP(); return;
+  }
+  undoStack.push({pa:pts.length-pb, da:dotMarkers.length-db});
+  redraw('#4ade80'); updateRP();
+  setSnapMsg(`✓ ${pts.length} נקודות`); setStatus('נדבק לשביל ✓');
+}
+
+async function findSnap(ll) {
+  const r=0.014, [s,n,w,e]=[ll.lat-r,ll.lat+r,ll.lng-r,ll.lng+r];
+  const q=`[out:json][timeout:15];(way["highway"~"^(path|footway|track|steps|pedestrian|bridleway)$"](${s},${w},${n},${e});way["trail_visibility"](${s},${w},${n},${e});way["sac_scale"](${s},${w},${n},${e});way["color"~"red|blue|green|black"](${s},${w},${n},${e}););out geom qt;`;
+  try {
+    const d = await ovFetch(q);
+    const els = d.elements||[];
+    setSnapMsg(`🔍 ${els.length} אלמנטים`);
+    if (!els.length) { setSnapMsg('⚠️ אזור ריק ב-OSM'); return null; }
+    let bp=null, bd=Infinity;
+    for (const el of els) {
+      if (!el.geometry||el.geometry.length<2) continue;
+      for (let i=0;i<el.geometry.length-1;i++) {
+        const a={lat:el.geometry[i].lat,lng:el.geometry[i].lon};
+        const b={lat:el.geometry[i+1].lat,lng:el.geometry[i+1].lon};
+        const cp=closestSeg(ll,a,b), d=hvDist(ll,cp);
+        if(d<bd){bd=d;bp=cp;}
+      }
+    }
+    if (bp&&bd<1500) { setSnapMsg(`✓ שביל ב-${Math.round(bd)}מ'`); return L.latLng(bp.lat,bp.lng); }
+    setSnapMsg(`⚠️ הקרוב: ${Math.round(bd)}מ'`);
+  } catch(e) { setSnapMsg(`❌ ${e.message}`); console.error(e); }
+  return null;
+}
+
+async function routeAlong(from,to) {
+  try {
+    const mLa=(from.lat+to.lat)/2, mLn=(from.lng+to.lng)/2;
+    const r=Math.max(Math.abs(from.lat-to.lat),Math.abs(from.lng-to.lng))*2+0.02;
+    const [s,n,w,e]=[mLa-r,mLa+r,mLn-r,mLn+r];
+    const q=`[out:json][timeout:20];(way["highway"~"^(path|footway|track|steps|pedestrian|bridleway)$"](${s},${w},${n},${e});way["trail_visibility"](${s},${w},${n},${e});way["sac_scale"](${s},${w},${n},${e});way["color"~"red|blue|green|black"](${s},${w},${n},${e}););out geom qt;`;
+    const d=await ovFetch(q);
+    if (!d.elements) return null;
+    let bw=null,bs=Infinity;
+    for (const el of d.elements) {
+      if (!el.geometry||el.geometry.length<2) continue;
+      const sc=minD(from,el.geometry)+minD(to,el.geometry);
+      if(sc<bs){bs=sc;bw=el;}
+    }
+    if (bw&&bs<0.05) {
+      const nodes=bw.geometry.map(n=>L.latLng(n.lat,n.lon));
+      const i1=nearIdx(from,nodes),i2=nearIdx(to,nodes);
+      const s2=Math.min(i1,i2),e2=Math.max(i1,i2);
+      if(e2-s2>0) return nodes.slice(s2,e2+1);
+    }
+  } catch(e) { console.error(e); }
+  return null;
+}
+
+// ── GPS ──────────────────────────────────────────────────
+function toggleGPS() {
+  const btn=document.getElementById('gps-btn');
+  if (gpsOn) {
+    if(watchId) navigator.geolocation.clearWatch(watchId);
+    gpsOn=false; btn.classList.remove('on');
+    if(gpsMarker){map.removeLayer(gpsMarker);map.removeLayer(gpsCircle);gpsMarker=null;}
+    setStatus('GPS כבוי'); return;
+  }
+  if (!navigator.geolocation) { alert('GPS לא זמין'); return; }
+  gpsOn=true; btn.classList.add('on'); setStatus('מאתר מיקום...');
+  watchId=navigator.geolocation.watchPosition(pos=>{
+    const ll=L.latLng(pos.coords.latitude,pos.coords.longitude), ac=pos.coords.accuracy;
+    if(!gpsMarker) {
+      gpsCircle=L.circle(ll,{radius:ac,color:'#34d399',fillColor:'#34d399',fillOpacity:0.1,weight:1}).addTo(map);
+      gpsMarker=L.circleMarker(ll,{radius:8,fillColor:'#34d399',color:'#fff',weight:2,fillOpacity:1}).addTo(map);
+      map.setView(ll,15);
+    } else { gpsMarker.setLatLng(ll); gpsCircle.setLatLng(ll).setRadius(ac); }
+    setStatus(`📍 דיוק: ${Math.round(ac)}מ'`);
+  }, err=>{
+    setStatus('❌ GPS: '+err.message); gpsOn=false; btn.classList.remove('on');
+  },{enableHighAccuracy:true,maximumAge:5000});
+}
+
+// ── Layers ───────────────────────────────────────────────
+function toggleLayer(name) {
+  const m={ihm:ihmL,topo:topoL,trails:trailsL,sat:satL};
+  const lyr=m[name], chk=document.getElementById('c-'+name);
+  if(map.hasLayer(lyr)){map.removeLayer(lyr);chk.checked=false;}
+  else{lyr.addTo(map);chk.checked=true;}
+}
+function toggleLegend() {
+  const l=document.getElementById('legend'), c=document.getElementById('c-leg');
+  const on=l.style.display==='block';
+  l.style.display=on?'none':'block'; c.checked=!on;
+}
+
+// ── Route ────────────────────────────────────────────────
+function addPoint(ll,color) {
+  const m=L.circleMarker(ll,{radius:6,fillColor:color,color:'#0f172a',weight:2,fillOpacity:1}).addTo(map);
+  dotMarkers.push(m); pts.push(ll); undoStack.push({pa:1,da:1});
+}
+function addDot(ll,color) {
+  dotMarkers.push(L.circleMarker(ll,{radius:6,fillColor:color,color:'#0f172a',weight:2,fillOpacity:1}).addTo(map));
+}
+function redraw(color) {
+  if(routeLine){map.removeLayer(routeLine);routeLine=null;}
+  if(pts.length<2) return;
+  routeLine=L.polyline(pts,{color,weight:5,opacity:0.92,lineJoin:'round',lineCap:'round'}).addTo(map);
+}
+function updateRP() {
+  if(pts.length<2) return;
+  let t=0; for(let i=1;i<pts.length;i++) t+=pts[i-1].distanceTo(pts[i]);
+  document.getElementById('rdist').textContent=(t/1000).toFixed(2);
+  document.getElementById('rpts').textContent=`ק"מ • ${dotMarkers.length} נקודות`;
+  document.getElementById('route-panel').style.display='block';
+}
+function undoLast() {
+  if(!undoStack.length) return;
+  const {pa,da}=undoStack.pop();
+  for(let i=0;i<pa;i++) pts.pop();
+  for(let i=0;i<da;i++){const m=dotMarkers.pop();if(m)map.removeLayer(m);}
+  redraw(mode==='snap'?'#4ade80':'#60a5fa'); updateRP();
+  if(!pts.length) document.getElementById('route-panel').style.display='none';
+  setStatus('בוטל');
+}
+function clearRoute() {
+  pts=[];undoStack=[];
+  if(routeLine){map.removeLayer(routeLine);routeLine=null;}
+  dotMarkers.forEach(m=>map.removeLayer(m));dotMarkers=[];
+  document.getElementById('route-panel').style.display='none';
+  setStatus('נוקה');
+}
+
+// ── GPX export ───────────────────────────────────────────
+function exportGPX() {
+  if(pts.length<2){alert('אין נקודות');return;}
+  let g=`<?xml version="1.0" encoding="UTF-8"?>\n<gpx version="1.1" creator="שבילי ישראל" xmlns="http://www.topografix.com/GPX/1/1">\n  <trk><name>מסלול</name><trkseg>\n`;
+  for(const p of pts) g+=`    <trkpt lat="${p.lat.toFixed(7)}" lon="${p.lng.toFixed(7)}"></trkpt>\n`;
+  g+=`  </trkseg></trk>\n</gpx>`;
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob([g],{type:'application/gpx+xml'}));
+  a.download='מסלול.gpx'; a.click();
+}
+
+// ── Geometry ─────────────────────────────────────────────
+function closestSeg(p,a,b){
+  const dx=b.lng-a.lng,dy=b.lat-a.lat,l2=dx*dx+dy*dy;
+  if(!l2) return a;
+  let t=((p.lng-a.lng)*dx+(p.lat-a.lat)*dy)/l2;
+  t=Math.max(0,Math.min(1,t));
+  return{lat:a.lat+t*dy,lng:a.lng+t*dx};
+}
+function hvDist(a,b){
+  const R=6371000,dLa=(b.lat-a.lat)*Math.PI/180,dLn=(b.lng-a.lng)*Math.PI/180;
+  const s=Math.sin(dLa/2)**2+Math.cos(a.lat*Math.PI/180)*Math.cos(b.lat*Math.PI/180)*Math.sin(dLn/2)**2;
+  return R*2*Math.atan2(Math.sqrt(s),Math.sqrt(1-s));
+}
+function minD(pt,g){let m=Infinity;for(const n of g){const d=(pt.lat-n.lat)**2+(pt.lng-n.lon)**2;if(d<m)m=d;}return Math.sqrt(m);}
+function nearIdx(pt,ns){let b=0,bd=Infinity;ns.forEach((n,i)=>{const d=(pt.lat-n.lat)**2+(pt.lng-n.lng)**2;if(d<bd){bd=d;b=i;}});return b;}
+function setStatus(m){document.getElementById('statusbar').textContent=m;}
+function setSnapMsg(m){document.getElementById('snap-msg').textContent=m;}
+
+initMap();
+</script>
+</body>
+</html>
