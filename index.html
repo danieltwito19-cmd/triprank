@@ -745,7 +745,12 @@ async function routeAlong(from, to) {
       const nodes=bw.geometry.map(nn=>L.latLng(nn.lat,nn.lon));
       const i1=nearIdx(from,nodes),i2=nearIdx(to,nodes);
       const s2=Math.min(i1,i2),e2=Math.max(i1,i2);
-      if(e2-s2>0) return nodes.slice(s2,e2+1);
+      if(e2-s2>0) {
+        const path = nodes.slice(s2, e2+1);
+        // אם הכיוון הגיאוגרפי הוא מi1 לi2, ו-i1>i2, סדר הנקודות הפוך
+        // → הפוך כדי שהחצים יצביעו מ-from ל-to
+        return i1 <= i2 ? path : path.reverse();
+      }
     }
   } catch(e) { console.error(e); }
   return null;
