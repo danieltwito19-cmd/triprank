@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"> 
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="theme-color" content="#1e293b">
 <title>שבילי ישראל</title>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
@@ -258,6 +258,89 @@ const SERVERS = [
   'https://overpass.osm.ch/api/interpreter',
   'https://lz4.overpass-api.de/api/interpreter',
 ];
+
+// ── Geo-tile cache ───────────────────────────────────────
+// חותך את ישראל לריבועים של ~5×5 ק"מ (0.05 מעלות).
+// כל ריבוע נשלח פעם אחת בלבד — כל שאר הלחיצות באותו אזור מיידיות.
+const TILE_SIZE = 0.05; // ~5.5 ק"מ
+const geoCache = new Map(); // key:"lat_lng" → Promise<Element[]>
+const pendingTiles = new Map(); // מניעת בקשות כפולות לאותו tile
+
+function tileKey(lat, lng) {
+  const tLat = Math.floor(lat / TILE_SIZE);
+  const tLng = Math.floor(lng / TILE_SIZE);
+  return `${tLat}_${tLng}`;
+}
+
+function tileBounds(lat, lng) {
+  const tLat = Math.floor(lat / TILE_SIZE) * TILE_SIZE;
+  const tLng = Math.floor(lng / TILE_SIZE) * TILE_SIZE;
+  // מוסיפים חפיפה של 20% למניעת חיתוכים בקצוות
+  const pad = TILE_SIZE * 0.2;
+  return {
+    s: tLat - pad, n: tLat + TILE_SIZE + pad,
+    w: tLng - pad, e: tLng + TILE_SIZE + pad
+  };
+}
+
+async function fetchTile(lat, lng) {
+  const key = tileKey(lat, lng);
+  if (geoCache.has(key)) return geoCache.get(key);
+  if (pendingTiles.has(key)) return pendingTiles.get(key); // אותה בקשה בתהליך
+
+  const {s,n,w,e} = tileBounds(lat, lng);
+  const q = `[out:json][timeout:20];
+(
+  way["highway"~"^(path|footway|track|steps|pedestrian|bridleway)$"](${s},${w},${n},${e});
+  way["trail_visibility"](${s},${w},${n},${e});
+  way["sac_scale"](${s},${w},${n},${e});
+  way["color"~"red|blue|green|black"](${s},${w},${n},${e});
+);
+out geom qt;`;
+
+  const promise = (async () => {
+    const opts = {method:'POST', headers:{'Content-Type':'application/x-www-form-urlencoded'},
+      body:'data='+encodeURIComponent(q), credentials:'omit'};
+    let lastErr;
+    for (const s of SERVERS) {
+      try { const r=await fetch(s,opts); if(r.ok){ const d=await r.json(); return d.elements||[]; } }
+      catch(e) { lastErr=e; }
+    }
+    throw lastErr || new Error('כל שרתי Overpass נכשלו');
+  })();
+
+  pendingTiles.set(key, promise);
+  try {
+    const elements = await promise;
+    geoCache.set(key, elements); // שמור בcache
+    setSnapMsg(`💾 ${geoCache.size} אזורים בcache`);
+    return elements;
+  } finally {
+    pendingTiles.delete(key);
+  }
+}
+
+// מחזיר כל הelements הרלוונטיים לנקודה — ממולטיפל tiles אם צריך
+async function getTrailsNear(ll) {
+  // טוען גם את ה-tile הסמוך אם הנקודה קרובה לגבול
+  const keys = new Set();
+  for (const dLat of [0, TILE_SIZE*0.1, -TILE_SIZE*0.1]) {
+    for (const dLng of [0, TILE_SIZE*0.1, -TILE_SIZE*0.1]) {
+      keys.add(tileKey(ll.lat+dLat, ll.lng+dLng));
+    }
+  }
+  const allEls = [];
+  for (const key of keys) {
+    const [tLat, tLng] = key.split('_').map(Number);
+    const els = await fetchTile(tLat*TILE_SIZE + TILE_SIZE/2, tLng*TILE_SIZE + TILE_SIZE/2);
+    allEls.push(...els);
+  }
+  // הסר כפולות לפי id
+  const seen = new Set();
+  return allEls.filter(el => { if(seen.has(el.id)) return false; seen.add(el.id); return true; });
+}
+
+// פונקציה ישנה נשמרת לתאימות אחורה
 async function ovFetch(q) {
   const opts = {method:'POST', headers:{'Content-Type':'application/x-www-form-urlencoded'},
     body:'data='+encodeURIComponent(q), credentials:'omit'};
@@ -336,6 +419,23 @@ function initMap() {
   map.on('click', onMapClick);
   map.on('mousemove', onMouseMove);
   setMode('pan');
+
+  // pre-fetch שבילים בזמן גלילה — בשקט ברקע
+  let prefetchTimer;
+  map.on('moveend zoomend', () => {
+    clearTimeout(prefetchTimer);
+    if (map.getZoom() < 12) return; // רק בזום קרוב מספיק
+    prefetchTimer = setTimeout(() => {
+      const c = map.getCenter();
+      const key = tileKey(c.lat, c.lng);
+      if (!geoCache.has(key) && !pendingTiles.has(key)) {
+        setStatus('⬇️ טוען שבילים ברקע...');
+        fetchTile(c.lat, c.lng)
+          .then(els => setStatus(`✓ ${els.length} שבילים נטענו`))
+          .catch(() => {});
+      }
+    }, 800);
+  });
 
   // סגור תוצאות חיפוש בלחיצה על מפה
   map.on('click', () => closeSearch());
@@ -455,12 +555,10 @@ function addAnchorDot(ll, color) {
 }
 
 async function findSnap(ll) {
-  const r=0.014, [s,n,w,e]=[ll.lat-r,ll.lat+r,ll.lng-r,ll.lng+r];
-  const q=`[out:json][timeout:15];(way["highway"~"^(path|footway|track|steps|pedestrian|bridleway)$"](${s},${w},${n},${e});way["trail_visibility"](${s},${w},${n},${e});way["sac_scale"](${s},${w},${n},${e});way["color"~"red|blue|green|black"](${s},${w},${n},${e}););out geom qt;`;
+  const cached = geoCache.has(tileKey(ll.lat, ll.lng));
+  setSnapMsg(cached ? '⚡ מה-cache...' : '🌐 טוען אזור...');
   try {
-    const d = await ovFetch(q);
-    const els = d.elements||[];
-    setSnapMsg(`🔍 ${els.length} אלמנטים`);
+    const els = await getTrailsNear(ll);
     if (!els.length) { setSnapMsg('⚠️ אזור ריק ב-OSM'); return null; }
     let bp=null, bd=Infinity;
     for (const el of els) {
@@ -472,22 +570,33 @@ async function findSnap(ll) {
         if(dd<bd){bd=dd;bp=cp;}
       }
     }
-    if (bp&&bd<1500) { setSnapMsg(`✓ שביל ב-${Math.round(bd)}מ'`); return L.latLng(bp.lat,bp.lng); }
+    if (bp&&bd<1500) { setSnapMsg(`✓ ${Math.round(bd)}מ' ${cached?'⚡':'🌐'}`); return L.latLng(bp.lat,bp.lng); }
     setSnapMsg(`⚠️ הקרוב: ${Math.round(bd)}מ'`);
   } catch(e) { setSnapMsg(`❌ ${e.message}`); console.error(e); }
   return null;
 }
 
-async function routeAlong(from,to) {
+async function routeAlong(from, to) {
   try {
-    const mLa=(from.lat+to.lat)/2, mLn=(from.lng+to.lng)/2;
-    const r=Math.max(Math.abs(from.lat-to.lat),Math.abs(from.lng-to.lng))*2+0.02;
-    const [s,n,w,e]=[mLa-r,mLa+r,mLn-r,mLn+r];
-    const q=`[out:json][timeout:20];(way["highway"~"^(path|footway|track|steps|pedestrian|bridleway)$"](${s},${w},${n},${e});way["trail_visibility"](${s},${w},${n},${e});way["sac_scale"](${s},${w},${n},${e});way["color"~"red|blue|green|black"](${s},${w},${n},${e}););out geom qt;`;
-    const d=await ovFetch(q);
-    if (!d.elements) return null;
-    let bw=null,bs=Infinity;
-    for (const el of d.elements) {
+    // מאחד tiles בין שתי הנקודות
+    const midLat=(from.lat+to.lat)/2, midLng=(from.lng+to.lng)/2;
+    const allTileKeys = new Set([
+      tileKey(from.lat,from.lng),
+      tileKey(to.lat,to.lng),
+      tileKey(midLat,midLng),
+    ]);
+    const allEls = [];
+    const seen = new Set();
+    for (const key of allTileKeys) {
+      const [tLat,tLng] = key.split('_').map(Number);
+      const els = await fetchTile(tLat*TILE_SIZE+TILE_SIZE/2, tLng*TILE_SIZE+TILE_SIZE/2);
+      for (const el of els) {
+        if (!seen.has(el.id)) { seen.add(el.id); allEls.push(el); }
+      }
+    }
+
+    let bw=null, bs=Infinity;
+    for (const el of allEls) {
       if (!el.geometry||el.geometry.length<2) continue;
       const sc=minD(from,el.geometry)+minD(to,el.geometry);
       if(sc<bs){bs=sc;bw=el;}
