@@ -589,11 +589,11 @@ function addArrowDecorators(latlngs, color) {
       const dLng = (B.lng - A.lng) * Math.cos(lat * Math.PI / 180); // תיקון קוסינוס לרוחב
       const heading = Math.atan2(dLng, dLat); // radians מצפון
 
-      // כנפי החץ — 140° משני צדי הכיוון
+      // כנפי החץ — 140° משני צדי הכיוון ההפוך (חץ קדימה)
       const d = ARROW_SIZE / 111000;
-      const wingAngle = Math.PI * 0.78; // ~140°
-      const angle1 = heading + Math.PI - wingAngle;
-      const angle2 = heading + Math.PI + wingAngle;
+      const wingAngle = Math.PI * 0.78;
+      const angle1 = heading - wingAngle;
+      const angle2 = heading + wingAngle;
 
       const tip   = L.latLng(lat, lng);
       const wing1 = L.latLng(
