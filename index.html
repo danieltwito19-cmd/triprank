@@ -196,9 +196,6 @@ html,body { height:100dvh; overflow:hidden; font-family:'Segoe UI','Arial Hebrew
       <div style="display:flex;align-items:center;gap:6px;padding:2px 3px;font-size:11px;color:#94a3b8">
         <div style="width:22px;height:4px;background:repeating-linear-gradient(90deg,#fb923c 0 6px,transparent 6px 10px);flex-shrink:0"></div>הלוך-חזור
       </div>
-      <div style="display:flex;align-items:center;gap:6px;padding:2px 3px;font-size:11px;color:#94a3b8">
-        <div style="width:22px;height:4px;background:#fbbf24;border-radius:2px;flex-shrink:0"></div>ללא שביל
-      </div>
     </div>
 
     <div class="fp" id="snap-panel">
@@ -562,43 +559,54 @@ function offsetLatLngs(latlngs, offsetMeters) {
   return result;
 }
 
-// מוסיף חצי כיוון על קטע
-// מחזיר מערך של Leaflet layers (polylines של חצים)
-function addArrowDecorators(latlngs, color, segLayer) {
+// מוסיף חצי כיוון על קטע — כיוון תמיד מ-latlngs[0] ל-latlngs[N]
+function addArrowDecorators(latlngs, color) {
   const arrows = [];
-  // הצב חץ כל ~150 מטר לאורך השביל
-  const ARROW_SPACING = 150; // מטרים
-  const ARROW_SIZE = 10; // מטרים
+  const ARROW_SPACING = 180; // מטרים בין חצים
+  const ARROW_SIZE    =  12; // מטרים — גודל כנפי החץ
 
-  let distAcc = 0;
-  let nextArrowAt = ARROW_SPACING / 2; // התחל באמצע
+  let distAcc    = 0;
+  let nextArrowAt = ARROW_SPACING * 0.4; // חץ ראשון מוקדם קצת
 
   for (let i = 0; i < latlngs.length - 1; i++) {
     const A = latlngs[i], B = latlngs[i+1];
     const segLen = A.distanceTo(B);
+    if (segLen < 0.1) continue;
+
     distAcc += segLen;
 
     while (distAcc >= nextArrowAt) {
-      // נקודה על הקטע
+      // מיקום החץ על הקטע (t ∈ [0,1])
       const t = 1 - (distAcc - nextArrowAt) / segLen;
+
       const lat = A.lat + (B.lat - A.lat) * t;
       const lng = A.lng + (B.lng - A.lng) * t;
 
-      // כיוון הקטע בדגרות
+      // כיוון אמיתי: A → B (lat מעלה = צפון, lng ימינה = מזרח)
+      // ב-Leaflet: lat = Y (צפון), lng = X (מזרח)
+      // heading = זווית מצפון בשעון (כמו bearing)
       const dLat = B.lat - A.lat;
-      const dLng = B.lng - A.lng;
-      const heading = Math.atan2(dLng, dLat); // radians
+      const dLng = (B.lng - A.lng) * Math.cos(lat * Math.PI / 180); // תיקון קוסינוס לרוחב
+      const heading = Math.atan2(dLng, dLat); // radians מצפון
 
-      // צייר V קטן (חץ)
+      // כנפי החץ — 140° משני צדי הכיוון
       const d = ARROW_SIZE / 111000;
-      const angle1 = heading + Math.PI * 0.8;
-      const angle2 = heading - Math.PI * 0.8;
-      const tip = L.latLng(lat, lng);
-      const wing1 = L.latLng(lat + Math.cos(angle1)*d, lng + Math.sin(angle1)*d);
-      const wing2 = L.latLng(lat + Math.cos(angle2)*d, lng + Math.sin(angle2)*d);
+      const wingAngle = Math.PI * 0.78; // ~140°
+      const angle1 = heading + Math.PI - wingAngle;
+      const angle2 = heading + Math.PI + wingAngle;
+
+      const tip   = L.latLng(lat, lng);
+      const wing1 = L.latLng(
+        lat + Math.cos(angle1) * d,
+        lng + Math.sin(angle1) * d / Math.cos(lat * Math.PI / 180)
+      );
+      const wing2 = L.latLng(
+        lat + Math.cos(angle2) * d,
+        lng + Math.sin(angle2) * d / Math.cos(lat * Math.PI / 180)
+      );
 
       const arrow = L.polyline([wing1, tip, wing2], {
-        color, weight: 2.5, opacity: 0.9,
+        color, weight: 2.5, opacity: 0.85,
         lineCap: 'round', lineJoin: 'round',
         interactive: false
       }).addTo(map);
@@ -643,21 +651,22 @@ async function doSnap(clicked) {
       return (segmentCount.get(k) || 0) > 1;
     });
 
-    // אם יש חפיפה — הזז את הקו הנוכחי צדדית
+    // אם יש חפיפה — הזז צדדית; אחרת צייר על המקום
     const drawSeg = isOverlap ? offsetLatLngs(seg, 6) : seg;
-    const baseColor = snapped ? '#4ade80' : '#fbbf24';
-    const lineColor = isOverlap ? '#fb923c' : baseColor; // כתום = חפיפה
+    // ירוק = על שביל, כתום-מקווקו = חפיפה — אין יותר צהוב
+    const lineColor = isOverlap ? '#fb923c' : '#4ade80';
 
     const segLine = L.polyline(drawSeg, {
       color: lineColor,
       weight: isOverlap ? 3 : 4,
       opacity: 0.92,
       lineJoin:'round', lineCap:'round',
-      dashArray: isOverlap ? '8,4' : null  // קו מקווקו לחפיפה
+      dashArray: isOverlap ? '8,4' : null
     }).addTo(map);
 
-    // חצי כיוון
-    const arrows = addArrowDecorators(drawSeg, lineColor, segLine);
+    // חצי כיוון — תמיד לפי כיוון ההליכה (from→pt)
+    // במסלול חוזר drawSeg מוזז הצידה אבל הסדר שלו זהה ל-seg (from→pt)
+    const arrows = addArrowDecorators(drawSeg, lineColor);
     arrowLayers.push(arrows);
 
     snapSegs.push(segLine);
@@ -672,7 +681,7 @@ async function doSnap(clicked) {
     setStatus('נקודת התחלה נקבעה');
   }
 
-  addAnchorDot(pt, snapped ? '#4ade80' : '#fbbf24');
+  addAnchorDot(pt, '#4ade80');
   updateRP();
 }
 
