@@ -188,6 +188,17 @@ html,body { height:100dvh; overflow:hidden; font-family:'Segoe UI','Arial Hebrew
       <div class="pt">שכבות</div>
       <div class="lr" onclick="toggleLayer('ihm')"><input type="checkbox" id="c-ihm" checked><label for="c-ihm">🥾 Israel Hiking</label></div>
       <div class="lr" onclick="toggleLayer('sat')"><input type="checkbox" id="c-sat"><label for="c-sat">🛰 לוויין</label></div>
+      <div style="height:1px;background:#1e293b;margin:6px 0"></div>
+      <div class="pt" style="margin-bottom:5px">מסלול</div>
+      <div style="display:flex;align-items:center;gap:6px;padding:2px 3px;font-size:11px;color:#94a3b8">
+        <div style="width:22px;height:4px;background:#4ade80;border-radius:2px;flex-shrink:0"></div>על שביל
+      </div>
+      <div style="display:flex;align-items:center;gap:6px;padding:2px 3px;font-size:11px;color:#94a3b8">
+        <div style="width:22px;height:4px;background:repeating-linear-gradient(90deg,#fb923c 0 6px,transparent 6px 10px);flex-shrink:0"></div>הלוך-חזור
+      </div>
+      <div style="display:flex;align-items:center;gap:6px;padding:2px 3px;font-size:11px;color:#94a3b8">
+        <div style="width:22px;height:4px;background:#fbbf24;border-radius:2px;flex-shrink:0"></div>ללא שביל
+      </div>
     </div>
 
     <div class="fp" id="snap-panel">
@@ -498,6 +509,109 @@ function addFreePoint(ll) {
 }
 
 // ── Snap drawing ─────────────────────────────────────────
+
+// מעקב אחר קטעים שכבר עברנו בהם — לזיהוי חפיפה
+// key: "lat1,lng1→lat2,lng2" (מעוגל) → מספר פעמים
+const segmentCount = new Map();
+
+function segKey(a, b) {
+  // מעגל ל-4 ספרות ומייצר key דו-כיווני (A→B == B→A)
+  const k1 = `${a.lat.toFixed(4)},${a.lng.toFixed(4)}`;
+  const k2 = `${b.lat.toFixed(4)},${b.lng.toFixed(4)}`;
+  return k1 < k2 ? `${k1}→${k2}` : `${k2}→${k1}`;
+}
+
+function countSegments(latlngs) {
+  // מחזיר מפה: כל צמד נקודות → כמה פעמים עבר שם
+  const counts = new Map();
+  for (let i = 0; i < latlngs.length - 1; i++) {
+    const k = segKey(latlngs[i], latlngs[i+1]);
+    const existing = segmentCount.get(k) || 0;
+    segmentCount.set(k, existing + 1);
+    counts.set(k, existing + 1);
+  }
+  return counts;
+}
+
+function removeSegmentCounts(latlngs) {
+  for (let i = 0; i < latlngs.length - 1; i++) {
+    const k = segKey(latlngs[i], latlngs[i+1]);
+    const v = segmentCount.get(k) || 1;
+    if (v <= 1) segmentCount.delete(k);
+    else segmentCount.set(k, v - 1);
+  }
+}
+
+// offset geometry — מזיז קו ימינה ב-offsetPx פיקסלים
+function offsetLatLngs(latlngs, offsetMeters) {
+  const result = [];
+  for (let i = 0; i < latlngs.length; i++) {
+    const prev = latlngs[Math.max(0, i-1)];
+    const next = latlngs[Math.min(latlngs.length-1, i+1)];
+    // כיוון הקטע
+    const dLat = next.lat - prev.lat;
+    const dLng = next.lng - prev.lng;
+    const len = Math.sqrt(dLat*dLat + dLng*dLng) || 1;
+    // נורמל אנכי (ימינה)
+    const nLat = -dLng / len;
+    const nLng =  dLat / len;
+    // המרה ממטרים למעלות (~111000 מ' למעלה)
+    const d = offsetMeters / 111000;
+    result.push(L.latLng(latlngs[i].lat + nLat*d, latlngs[i].lng + nLng*d));
+  }
+  return result;
+}
+
+// מוסיף חצי כיוון על קטע
+// מחזיר מערך של Leaflet layers (polylines של חצים)
+function addArrowDecorators(latlngs, color, segLayer) {
+  const arrows = [];
+  // הצב חץ כל ~150 מטר לאורך השביל
+  const ARROW_SPACING = 150; // מטרים
+  const ARROW_SIZE = 10; // מטרים
+
+  let distAcc = 0;
+  let nextArrowAt = ARROW_SPACING / 2; // התחל באמצע
+
+  for (let i = 0; i < latlngs.length - 1; i++) {
+    const A = latlngs[i], B = latlngs[i+1];
+    const segLen = A.distanceTo(B);
+    distAcc += segLen;
+
+    while (distAcc >= nextArrowAt) {
+      // נקודה על הקטע
+      const t = 1 - (distAcc - nextArrowAt) / segLen;
+      const lat = A.lat + (B.lat - A.lat) * t;
+      const lng = A.lng + (B.lng - A.lng) * t;
+
+      // כיוון הקטע בדגרות
+      const dLat = B.lat - A.lat;
+      const dLng = B.lng - A.lng;
+      const heading = Math.atan2(dLng, dLat); // radians
+
+      // צייר V קטן (חץ)
+      const d = ARROW_SIZE / 111000;
+      const angle1 = heading + Math.PI * 0.8;
+      const angle2 = heading - Math.PI * 0.8;
+      const tip = L.latLng(lat, lng);
+      const wing1 = L.latLng(lat + Math.cos(angle1)*d, lng + Math.sin(angle1)*d);
+      const wing2 = L.latLng(lat + Math.cos(angle2)*d, lng + Math.sin(angle2)*d);
+
+      const arrow = L.polyline([wing1, tip, wing2], {
+        color, weight: 2.5, opacity: 0.9,
+        lineCap: 'round', lineJoin: 'round',
+        interactive: false
+      }).addTo(map);
+      arrows.push(arrow);
+      nextArrowAt += ARROW_SPACING;
+    }
+  }
+  return arrows;
+}
+
+// כל הlayers הנוספים (חצים) — נשמרים ל-undo
+let arrowLayers = []; // מערך מקביל ל-snapSegs
+
 async function doSnap(clicked) {
   clearPreview();
   setSnapMsg('🌐 מחפש שבילים...'); setStatus('שולח בקשה ל-OSM...');
@@ -512,35 +626,52 @@ async function doSnap(clicked) {
 
     let seg;
     if (pathNodes && pathNodes.length > 1) {
-      // מסלול על השביל
       seg = pathNodes;
       setSnapMsg(`✓ ${pathNodes.length} נקודות על שביל`);
       setStatus('נדבק לשביל ✓');
     } else {
-      // לא נמצא שביל — קו ישר (fallback)
       seg = [from, pt];
       setSnapMsg('⚠️ קו ישר — לא נמצא שביל');
       setStatus('קו ישר (fallback)');
     }
 
-    // צייר את הקטע החדש בלבד
-    const segLine = L.polyline(seg, {
-      color: snapped ? '#4ade80' : '#fbbf24',
-      weight:4, opacity:0.92, lineJoin:'round', lineCap:'round'
+    // בדוק חפיפה עם קטעים קיימים
+    countSegments(seg);
+    const isOverlap = seg.some((_, i) => {
+      if (i >= seg.length - 1) return false;
+      const k = segKey(seg[i], seg[i+1]);
+      return (segmentCount.get(k) || 0) > 1;
+    });
+
+    // אם יש חפיפה — הזז את הקו הנוכחי צדדית
+    const drawSeg = isOverlap ? offsetLatLngs(seg, 6) : seg;
+    const baseColor = snapped ? '#4ade80' : '#fbbf24';
+    const lineColor = isOverlap ? '#fb923c' : baseColor; // כתום = חפיפה
+
+    const segLine = L.polyline(drawSeg, {
+      color: lineColor,
+      weight: isOverlap ? 3 : 4,
+      opacity: 0.92,
+      lineJoin:'round', lineCap:'round',
+      dashArray: isOverlap ? '8,4' : null  // קו מקווקו לחפיפה
     }).addTo(map);
+
+    // חצי כיוון
+    const arrows = addArrowDecorators(drawSeg, lineColor, segLine);
+    arrowLayers.push(arrows);
+
     snapSegs.push(segLine);
     snapPts.push(pt);
-    undoStack.push({type:'snap', seg:segLine, pt});
+    undoStack.push({type:'snap', seg:segLine, pt, rawSeg:seg, arrows});
 
   } else {
-    // נקודה ראשונה — רק עוגן
     snapPts.push(pt);
     undoStack.push({type:'snap-first', pt});
+    arrowLayers.push([]);
     setSnapMsg('✓ נקודת התחלה • גע לנקודה הבאה');
     setStatus('נקודת התחלה נקבעה');
   }
 
-  // סמן עוגן
   addAnchorDot(pt, snapped ? '#4ade80' : '#fbbf24');
   updateRP();
 }
@@ -772,9 +903,15 @@ function undoLast() {
     map.removeLayer(op.seg);
     snapSegs.pop();
     snapPts.pop();
+    // נקה חצים
+    if (op.arrows) op.arrows.forEach(a => map.removeLayer(a));
+    arrowLayers.pop();
+    // נקה segment counts
+    if (op.rawSeg) removeSegmentCounts(op.rawSeg);
     const am=anchorMarkers.pop(); if(am) map.removeLayer(am);
   } else if (op.type==='snap-first') {
     snapPts.pop();
+    arrowLayers.pop();
     const am=anchorMarkers.pop(); if(am) map.removeLayer(am);
   }
 
@@ -789,6 +926,8 @@ function clearRoute() {
   snapPts=[]; undoStack=[];
   snapSegs.forEach(s=>map.removeLayer(s)); snapSegs=[];
   anchorMarkers.forEach(m=>map.removeLayer(m)); anchorMarkers=[];
+  arrowLayers.forEach(arr=>arr.forEach(a=>map.removeLayer(a))); arrowLayers=[];
+  segmentCount.clear();
   if(freePolyline){map.removeLayer(freePolyline);freePolyline=null;}
   clearPreview();
   document.getElementById('route-panel').style.display='none';
