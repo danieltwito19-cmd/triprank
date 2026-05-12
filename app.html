@@ -1,0 +1,1571 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#0a1628">
+<title>שבילי ישראל</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Heebo:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+<style>
+/* ══════════════════════════════════════════════════
+   DESIGN TOKENS
+══════════════════════════════════════════════════ */
+:root {
+  --bg-deep:    #050e1f;
+  --bg-dark:    #0a1628;
+  --bg-card:    #0f1f38;
+  --bg-hover:   #162845;
+  --border:     #1e3a5f;
+  --border-hi:  #2d5a8e;
+  --text-hi:    #e8f4fd;
+  --text-main:  #a8c8e8;
+  --text-muted: #4a7a9b;
+  --green:      #22c55e;
+  --green-dim:  rgba(34,197,94,0.15);
+  --blue:       #3b82f6;
+  --blue-dim:   rgba(59,130,246,0.15);
+  --orange:     #f97316;
+  --red:        #ef4444;
+  --gold:       #f59e0b;
+  --accent:     #06b6d4;
+  --radius:     12px;
+  --shadow:     0 4px 24px rgba(0,0,0,0.6);
+  --topbar-h:   54px;
+  --bottombar-h:66px;
+}
+
+* { box-sizing:border-box; margin:0; padding:0; -webkit-tap-highlight-color:transparent; }
+html, body { height:100dvh; overflow:hidden; font-family:'Heebo',sans-serif; background:var(--bg-deep); color:var(--text-main); }
+
+/* ── Layout ─────────────────────────────────────── */
+#shell { display:flex; flex-direction:column; height:100dvh; }
+
+/* ── Topbar ──────────────────────────────────────── */
+#topbar {
+  display:flex; align-items:center; gap:8px;
+  padding:0 12px; height:var(--topbar-h);
+  padding-top:env(safe-area-inset-top);
+  background:var(--bg-dark); border-bottom:1px solid var(--border);
+  flex-shrink:0; z-index:200; position:relative;
+}
+.logo { font-size:16px; font-weight:900; color:var(--text-hi); display:flex; align-items:center; gap:6px; white-space:nowrap; letter-spacing:-0.5px; flex-shrink:0; }
+.logo em { color:var(--green); font-style:normal; }
+
+#search-wrap {
+  flex:1; display:flex; align-items:center;
+  background:var(--bg-card); border:1px solid var(--border);
+  border-radius:10px; overflow:hidden; min-width:0; max-width:320px;
+}
+#search-input {
+  flex:1; background:transparent; border:none; outline:none;
+  color:var(--text-hi); font-size:13px; padding:8px 12px;
+  font-family:inherit; direction:rtl; min-width:0;
+}
+#search-input::placeholder { color:var(--text-muted); }
+#search-btn {
+  padding:8px 11px; background:transparent; border:none;
+  color:var(--text-muted); cursor:pointer; flex-shrink:0;
+}
+
+#user-pill {
+  display:flex; align-items:center; gap:6px;
+  padding:4px 10px 4px 4px; border-radius:999px;
+  background:var(--bg-card); border:1px solid var(--border);
+  cursor:pointer; transition:border-color 0.15s; flex-shrink:0;
+}
+#user-pill:hover { border-color:var(--border-hi); }
+.user-avatar {
+  width:28px; height:28px; border-radius:50%;
+  background:linear-gradient(135deg,var(--blue),var(--accent));
+  display:flex; align-items:center; justify-content:center;
+  font-size:13px; font-weight:800; color:#fff;
+}
+.user-name { font-size:11px; font-weight:700; color:var(--text-hi); max-width:58px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+
+/* ── Main area ───────────────────────────────────── */
+#main { flex:1; position:relative; overflow:hidden; }
+
+/* ── Map iframe ──────────────────────────────────── */
+#map-frame {
+  position:absolute; inset:0;
+  width:100%; height:100%;
+  border:none; display:block;
+  /* The iframe shows/hides based on current view */
+  transition:opacity 0.25s;
+}
+#map-frame.hidden { opacity:0; pointer-events:none; }
+
+/* ── Map drawing toolbar (overlaid on map) ───────── */
+#map-toolbar {
+  position:absolute; bottom:calc(var(--bottombar-h) + 10px); left:50%;
+  transform:translateX(-50%);
+  display:none; /* shown only in DRAW view */
+  gap:6px; align-items:center;
+  background:rgba(10,22,40,0.95); border:1px solid var(--border);
+  border-radius:999px; padding:6px 10px;
+  box-shadow:var(--shadow); backdrop-filter:blur(12px);
+  z-index:100; white-space:nowrap;
+}
+#map-toolbar.visible { display:flex; }
+
+.tool-btn {
+  display:flex; flex-direction:column; align-items:center; gap:2px;
+  padding:6px 10px; border-radius:999px; border:1px solid transparent;
+  background:transparent; color:var(--text-muted);
+  font-size:10px; font-weight:700; cursor:pointer; font-family:inherit;
+  transition:all 0.15s; white-space:nowrap;
+}
+.tool-btn:hover { background:var(--bg-hover); color:var(--text-main); }
+.tool-btn.mode-pan  { background:var(--blue-dim); border-color:var(--blue); color:#93c5fd; }
+.tool-btn.mode-free { background:var(--blue-dim); border-color:#60a5fa; color:#dbeafe; }
+.tool-btn.mode-snap { background:var(--green-dim); border-color:var(--green); color:#bbf7d0; }
+.tool-sep { width:1px; height:28px; background:var(--border); flex-shrink:0; }
+
+/* Route distance badge (floating over map) */
+#route-badge {
+  position:absolute; top:10px; right:10px; z-index:100;
+  background:rgba(10,22,40,0.95); border:1px solid var(--border);
+  border-radius:var(--radius); padding:10px 14px;
+  display:none; flex-direction:column; gap:2px;
+  backdrop-filter:blur(10px); box-shadow:var(--shadow);
+}
+#route-badge.visible { display:flex; }
+#route-badge-dist { font-size:26px; font-weight:900; color:var(--text-hi); line-height:1; }
+#route-badge-sub { font-size:11px; color:var(--text-muted); }
+#route-badge-save {
+  margin-top:8px; padding:7px 14px; border-radius:8px;
+  background:var(--green); border:none; color:#fff;
+  font-weight:700; font-size:12px; cursor:pointer; font-family:inherit;
+}
+#route-badge-save:hover { background:#16a34a; }
+
+/* Snap status (floating) */
+#snap-badge {
+  position:absolute; top:10px; left:10px; z-index:100;
+  background:rgba(10,22,40,0.95); border:1px solid var(--border);
+  border-radius:var(--radius); padding:8px 12px; font-size:12px;
+  display:none; color:var(--text-muted); max-width:180px;
+  backdrop-filter:blur(10px);
+}
+#snap-badge.visible { display:block; }
+#snap-badge-title { font-weight:800; color:var(--text-hi); font-size:13px; margin-bottom:3px; }
+
+/* Status bar */
+#status-bar {
+  position:absolute; bottom:calc(var(--bottombar-h) + 10px); left:10px; right:10px;
+  z-index:99; background:rgba(10,22,40,0.88); border:1px solid var(--border);
+  border-radius:999px; padding:5px 14px; font-size:11px; color:var(--text-muted);
+  pointer-events:none; text-align:center; white-space:nowrap;
+  overflow:hidden; text-overflow:ellipsis; display:none;
+}
+#status-bar.visible { display:block; }
+
+/* ── Bottom Navigation ───────────────────────────── */
+#bottom-nav {
+  position:absolute; bottom:0; left:0; right:0; z-index:200;
+  background:var(--bg-dark); border-top:1px solid var(--border);
+  display:flex; align-items:center; justify-content:space-around;
+  padding:6px 4px; padding-bottom:calc(6px + env(safe-area-inset-bottom));
+  height:var(--bottombar-h);
+}
+.nav-btn {
+  display:flex; flex-direction:column; align-items:center; gap:3px;
+  padding:5px 6px; border-radius:10px; border:1px solid transparent;
+  background:transparent; color:var(--text-muted);
+  font-size:10px; font-weight:700; cursor:pointer; flex:1; max-width:72px;
+  font-family:inherit; transition:all 0.15s;
+}
+.nav-btn:active { transform:scale(0.91); }
+.nav-btn.active { background:var(--blue-dim); border-color:var(--blue); color:#93c5fd; }
+.nav-btn.active-green { background:var(--green-dim); border-color:var(--green); color:#86efac; }
+
+/* ══════════════════════════════════════════════════
+   OVERLAY SYSTEM (panels on top of everything)
+══════════════════════════════════════════════════ */
+#overlay {
+  position:absolute; inset:0; z-index:300;
+  background:rgba(5,14,31,0.96); backdrop-filter:blur(6px);
+  display:none; flex-direction:column;
+  overflow:hidden;
+}
+#overlay.show { display:flex; }
+
+.panel-header {
+  display:flex; align-items:center; gap:10px;
+  padding:14px 14px 12px; border-bottom:1px solid var(--border);
+  flex-shrink:0; background:var(--bg-dark);
+  position:sticky; top:0; z-index:1;
+}
+.panel-back {
+  width:36px; height:36px; border-radius:50%; border:1px solid var(--border);
+  background:transparent; color:var(--text-main); cursor:pointer;
+  display:flex; align-items:center; justify-content:center; flex-shrink:0;
+  transition:background 0.15s;
+}
+.panel-back:hover { background:var(--bg-hover); }
+.panel-title { font-size:18px; font-weight:800; color:var(--text-hi); flex:1; }
+.panel-action {
+  padding:7px 16px; border-radius:9px; border:none;
+  background:var(--green); color:#fff; font-weight:700; font-size:13px;
+  cursor:pointer; font-family:inherit;
+}
+
+/* ── Tabs ────────────────────────────────────────── */
+.tab-bar {
+  display:flex; border-bottom:1px solid var(--border);
+  overflow-x:auto; flex-shrink:0; background:var(--bg-dark); padding:0 12px;
+}
+.tab-bar::-webkit-scrollbar { display:none; }
+.tab-btn {
+  padding:11px 14px; font-size:13px; font-weight:700; color:var(--text-muted);
+  border:none; background:transparent; cursor:pointer; font-family:inherit;
+  white-space:nowrap; border-bottom:2px solid transparent; margin-bottom:-1px;
+  transition:all 0.15s;
+}
+.tab-btn.active { color:var(--accent); border-bottom-color:var(--accent); }
+.tab-pane { display:none; flex:1; overflow-y:auto; -webkit-overflow-scrolling:touch; }
+.tab-pane.active { display:block; }
+.tab-pane::-webkit-scrollbar { width:4px; }
+.tab-pane::-webkit-scrollbar-thumb { background:var(--border); border-radius:2px; }
+
+/* ── Cards ───────────────────────────────────────── */
+.card {
+  background:var(--bg-card); border:1px solid var(--border);
+  border-radius:var(--radius); overflow:hidden; margin:10px 12px;
+  cursor:pointer; transition:border-color 0.15s;
+}
+.card:hover { border-color:var(--border-hi); }
+.card-thumb {
+  width:100%; height:150px; background:var(--bg-hover);
+  display:flex; align-items:center; justify-content:center;
+  font-size:52px; overflow:hidden; position:relative;
+}
+.card-thumb img { width:100%; height:100%; object-fit:cover; }
+.card-body { padding:12px 14px; }
+.card-title { font-size:15px; font-weight:800; color:var(--text-hi); margin-bottom:4px; }
+.card-meta { font-size:11px; color:var(--text-muted); display:flex; gap:10px; flex-wrap:wrap; margin-bottom:6px; }
+.card-tags { display:flex; gap:6px; flex-wrap:wrap; }
+
+.tag {
+  padding:3px 9px; border-radius:999px; font-size:10px; font-weight:700;
+  background:var(--bg-hover); color:var(--text-muted); border:1px solid var(--border);
+}
+.tag.easy   { background:rgba(34,197,94,0.12); color:#86efac; border-color:rgba(34,197,94,0.3); }
+.tag.medium { background:rgba(249,115,22,0.12); color:#fdba74; border-color:rgba(249,115,22,0.3); }
+.tag.hard   { background:rgba(239,68,68,0.12); color:#fca5a5; border-color:rgba(239,68,68,0.3); }
+.tag.done   { background:rgba(34,197,94,0.18); color:#4ade80; border-color:rgba(34,197,94,0.4); }
+
+/* ── Forms ───────────────────────────────────────── */
+.form-section { padding:14px; border-bottom:1px solid var(--border); }
+.form-section:last-child { border-bottom:none; }
+.form-label { font-size:11px; font-weight:800; color:var(--text-muted); margin-bottom:6px; display:block; text-transform:uppercase; letter-spacing:.1em; }
+.form-input, .form-select, .form-textarea {
+  width:100%; padding:10px 12px; border-radius:9px;
+  border:1px solid var(--border); background:var(--bg-card);
+  color:var(--text-hi); font-size:14px; font-family:inherit; outline:none;
+  transition:border-color 0.15s;
+}
+.form-input:focus, .form-select:focus, .form-textarea:focus { border-color:var(--accent); }
+.form-textarea { min-height:80px; resize:vertical; }
+.form-select option { background:var(--bg-dark); }
+.form-row { display:grid; grid-template-columns:1fr 1fr; gap:0; }
+
+/* Rating slider */
+.rating-row { display:flex; align-items:center; gap:10px; padding:6px 0; }
+.rating-lbl { font-size:12px; color:var(--text-main); min-width:88px; }
+.r-slider { flex:1; accent-color:var(--accent); cursor:pointer; }
+.r-val { font-size:12px; font-weight:700; color:var(--accent); min-width:18px; text-align:center; }
+
+/* ── Stats ───────────────────────────────────────── */
+.stats-grid { display:grid; grid-template-columns:1fr 1fr; gap:10px; padding:12px; }
+.stat-card { background:var(--bg-card); border:1px solid var(--border); border-radius:var(--radius); padding:14px; text-align:center; }
+.stat-num  { font-size:30px; font-weight:900; color:var(--text-hi); line-height:1; }
+.stat-icon { font-size:20px; margin-bottom:6px; }
+.stat-lbl  { font-size:10px; color:var(--text-muted); margin-top:4px; font-weight:700; text-transform:uppercase; letter-spacing:.08em; }
+
+/* ── Trip detail ─────────────────────────────────── */
+.trip-hero {
+  width:100%; height:200px; flex-shrink:0;
+  background:linear-gradient(135deg,#0a1628,#1e3a5f);
+  display:flex; align-items:center; justify-content:center;
+  font-size:72px; position:relative; overflow:hidden;
+}
+.trip-hero img { width:100%; height:100%; object-fit:cover; position:absolute; inset:0; }
+.trip-info-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:1px; background:var(--border); }
+.tic { background:var(--bg-card); padding:12px 8px; text-align:center; }
+.tic-v { font-size:16px; font-weight:900; color:var(--text-hi); }
+.tic-l { font-size:9px; color:var(--text-muted); margin-top:2px; font-weight:700; text-transform:uppercase; letter-spacing:.08em; }
+
+/* Updates */
+.update-chip { display:inline-flex; align-items:center; gap:4px; padding:3px 9px; border-radius:999px; font-size:11px; font-weight:700; border:1px solid; }
+.chip-water { background:rgba(59,130,246,0.12); color:#93c5fd; border-color:rgba(59,130,246,0.3); }
+.chip-block { background:rgba(239,68,68,0.12); color:#fca5a5; border-color:rgba(239,68,68,0.3); }
+.chip-crowd { background:rgba(249,115,22,0.12); color:#fdba74; border-color:rgba(249,115,22,0.3); }
+.chip-done  { background:rgba(34,197,94,0.12); color:#86efac; border-color:rgba(34,197,94,0.3); }
+
+/* Progress bar */
+.prog-wrap { background:var(--border); border-radius:999px; height:4px; overflow:hidden; margin-top:4px; }
+.prog-bar  { height:100%; background:linear-gradient(90deg,var(--green),var(--accent)); border-radius:999px; transition:width 0.6s; }
+
+/* Toggle */
+.toggle-row { display:flex; align-items:center; gap:10px; padding:8px 0; }
+.toggle { position:relative; width:44px; height:24px; flex-shrink:0; }
+.toggle input { opacity:0; width:0; height:0; }
+.toggle-track { position:absolute; inset:0; background:var(--border); border-radius:999px; cursor:pointer; transition:.3s; }
+.toggle-track:before { position:absolute; content:''; height:18px; width:18px; left:3px; bottom:3px; background:#fff; border-radius:50%; transition:.3s; }
+.toggle input:checked + .toggle-track { background:var(--green); }
+.toggle input:checked + .toggle-track:before { transform:translateX(20px); }
+.toggle-lbl { font-size:13px; color:var(--text-main); }
+
+/* Filters */
+.filters-row { display:flex; gap:8px; padding:10px 12px; overflow-x:auto; flex-shrink:0; }
+.filters-row::-webkit-scrollbar { display:none; }
+.filter-chip {
+  padding:6px 13px; border-radius:999px; border:1px solid var(--border);
+  background:transparent; color:var(--text-muted); font-size:12px; font-weight:600;
+  cursor:pointer; white-space:nowrap; font-family:inherit; transition:all 0.15s;
+}
+.filter-chip.on { background:var(--blue-dim); border-color:var(--blue); color:#bfdbfe; }
+
+/* Empty state */
+.empty-state { display:flex; flex-direction:column; align-items:center; justify-content:center; padding:52px 24px; text-align:center; }
+.empty-icon { font-size:48px; margin-bottom:12px; opacity:0.7; }
+.empty-title { font-size:17px; font-weight:800; color:var(--text-hi); margin-bottom:6px; }
+.empty-text { font-size:13px; color:var(--text-muted); line-height:1.6; }
+
+/* Import zone */
+.import-zone { margin:12px; padding:28px 20px; border-radius:var(--radius); border:2px dashed var(--border); text-align:center; cursor:pointer; transition:border-color 0.15s; }
+.import-zone:hover { border-color:var(--accent); }
+
+/* Section header */
+.section-hdr { display:flex; align-items:center; justify-content:space-between; padding:14px 14px 6px; }
+.section-ttl { font-size:15px; font-weight:800; color:var(--text-hi); }
+.section-link { font-size:12px; color:var(--accent); cursor:pointer; font-weight:600; }
+
+/* Emoji picker */
+.emoji-btn { padding:6px; font-size:22px; background:var(--bg-card); border:1px solid var(--border); border-radius:9px; cursor:pointer; transition:border-color 0.1s; }
+.emoji-btn.sel { border-color:var(--accent); }
+
+/* Stars */
+.stars-row { display:flex; gap:8px; font-size:26px; }
+.s { cursor:pointer; color:var(--text-muted); transition:color 0.1s; }
+.s.on { color:var(--gold); }
+
+/* ══════════════════════════════════════════════════
+   AUTH SCREEN
+══════════════════════════════════════════════════ */
+#auth-screen {
+  position:fixed; inset:0; z-index:500;
+  background:var(--bg-deep); display:none;
+  flex-direction:column; align-items:center; justify-content:center;
+  padding:24px;
+}
+#auth-screen.show { display:flex; }
+.auth-logo  { font-size:56px; margin-bottom:8px; }
+.auth-title { font-size:28px; font-weight:900; color:var(--text-hi); letter-spacing:-1px; }
+.auth-sub   { font-size:14px; color:var(--text-muted); margin-bottom:32px; text-align:center; margin-top:6px; }
+.auth-form  { width:100%; max-width:360px; }
+.auth-tabs  { display:flex; border:1px solid var(--border); border-radius:10px; overflow:hidden; margin-bottom:18px; }
+.auth-tab   { flex:1; padding:10px; border:none; background:transparent; color:var(--text-muted); font-weight:700; font-size:14px; cursor:pointer; font-family:inherit; transition:all 0.15s; }
+.auth-tab.active { background:var(--blue-dim); color:var(--text-hi); border-color:var(--blue); }
+.auth-input { width:100%; padding:12px 14px; margin-bottom:10px; border-radius:10px; border:1px solid var(--border); background:var(--bg-card); color:var(--text-hi); font-size:15px; font-family:inherit; outline:none; text-align:right; }
+.auth-input:focus { border-color:var(--accent); }
+.auth-submit { width:100%; padding:13px; border-radius:10px; border:none; background:var(--green); color:#fff; font-size:16px; font-weight:800; cursor:pointer; font-family:inherit; margin-bottom:10px; }
+.auth-google { width:100%; padding:12px; border-radius:10px; border:1px solid var(--border); background:var(--bg-card); color:var(--text-hi); font-size:14px; font-weight:700; cursor:pointer; font-family:inherit; display:flex; align-items:center; justify-content:center; gap:10px; }
+.auth-skip  { margin-top:14px; font-size:12px; color:var(--text-muted); cursor:pointer; text-align:center; text-decoration:underline; }
+
+/* ══════════════════════════════════════════════════
+   TOAST
+══════════════════════════════════════════════════ */
+#toast {
+  position:fixed; bottom:calc(var(--bottombar-h) + 14px); left:50%;
+  transform:translateX(-50%) translateY(80px);
+  background:var(--bg-card); border:1px solid var(--border);
+  border-radius:999px; padding:10px 20px;
+  font-size:13px; font-weight:600; color:var(--text-hi);
+  z-index:9999; transition:transform 0.3s; white-space:nowrap; box-shadow:var(--shadow);
+}
+#toast.show { transform:translateX(-50%) translateY(0); }
+
+/* ── Install banner ──────────────────────────────── */
+#install-banner { display:none; align-items:center; gap:8px; padding:8px 12px; background:#0c4a6e; border-bottom:1px solid #0369a1; font-size:13px; color:#e0f2fe; flex-shrink:0; }
+#install-banner button { padding:4px 12px; border-radius:7px; background:#0284c7; border:none; color:#fff; font-weight:700; cursor:pointer; font-family:inherit; font-size:12px; }
+.xbtn { background:transparent!important; border:1px solid #0369a1!important; color:#7dd3fc!important; margin-right:auto; }
+
+@media (min-width:768px) {
+  .stats-grid { grid-template-columns:repeat(4,1fr); }
+  #bottom-nav { justify-content:center; gap:10px; }
+  .nav-btn { max-width:90px; }
+}
+</style>
+</head>
+<body>
+<div id="shell">
+
+  <!-- ── Install Banner ─────────────────────────── -->
+  <div id="install-banner">
+    <span>📲 התקן כאפליקציה</span>
+    <button id="ibtn">התקן</button>
+    <button class="xbtn" onclick="document.getElementById('install-banner').style.display='none'">✕</button>
+  </div>
+
+  <!-- ── Topbar ─────────────────────────────────── -->
+  <div id="topbar">
+    <div class="logo">🥾 <em>שבילי ישראל</em></div>
+    <div id="search-wrap">
+      <input id="search-input" type="text" placeholder="חפש מסלול, מקום..." autocomplete="off" autocorrect="off" spellcheck="false"/>
+      <button id="search-btn" onclick="handleSearch()">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.35-4.35"/></svg>
+      </button>
+    </div>
+    <div id="user-pill" onclick="onUserPill()">
+      <div class="user-avatar" id="avatar-top">?</div>
+      <div class="user-name" id="name-top">כניסה</div>
+    </div>
+  </div>
+
+  <!-- ── Main ───────────────────────────────────── -->
+  <div id="main">
+
+    <!--
+      ══════════════════════════════════════════
+      MAP VIEW (iframe to map.html)
+      ══════════════════════════════════════════
+      map.html is the existing file — unchanged except
+      for adding <script src="map-bridge.js"></script>
+      before its </body>.
+    -->
+    <iframe
+      id="map-frame"
+      src="map.html"
+      title="מפת שבילי ישראל"
+      allow="geolocation"
+      sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
+    ></iframe>
+
+    <!-- Drawing toolbar (overlaid on iframe) -->
+    <div id="map-toolbar">
+      <button class="tool-btn mode-pan" id="tb-pan" onclick="mapCmd('SET_MODE','pan')">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 9l-3 3 3 3M9 5l3-3 3 3M15 19l-3 3-3-3M19 9l3 3-3 3"/></svg>
+        תצוגה
+      </button>
+      <button class="tool-btn" id="tb-free" onclick="mapCmd('SET_MODE','free')">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 20L7 7l5 5 7-10"/></svg>
+        חופשי
+      </button>
+      <button class="tool-btn" id="tb-snap" onclick="mapCmd('SET_MODE','snap')">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 20c3-6 5-9 9-9s6 4 9-6"/><circle cx="12" cy="12" r="2.5" fill="currentColor" stroke="none"/></svg>
+        Snap
+      </button>
+      <div class="tool-sep"></div>
+      <button class="tool-btn" onclick="mapCmd('UNDO')">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 12H14a5 5 0 010 10H9"/><path d="M4 12L8 8M4 12l4 4"/></svg>
+        בטל
+      </button>
+      <button class="tool-btn" onclick="mapCmd('CLEAR_ROUTE')">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"/></svg>
+        נקה
+      </button>
+      <div class="tool-sep"></div>
+      <label class="tool-btn" style="cursor:pointer">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
+        GPX
+        <input type="file" accept=".gpx,.kml" style="display:none" onchange="handleGPXFile(this.files[0])"/>
+      </label>
+    </div>
+
+    <!-- Route badge -->
+    <div id="route-badge">
+      <div id="route-badge-dist">0.0</div>
+      <div id="route-badge-sub">ק"מ · 0 נקודות</div>
+      <button id="route-badge-save" onclick="openSaveTrip()">💾 שמור טיול</button>
+    </div>
+
+    <!-- Snap badge -->
+    <div id="snap-badge">
+      <div id="snap-badge-title">📍 Snap to Trail</div>
+      <div id="snap-badge-msg">גע ליד שביל</div>
+    </div>
+
+    <!-- Status -->
+    <div id="status-bar"></div>
+
+    <!-- ══ OVERLAY (panels) ══ -->
+    <div id="overlay">
+      <!-- Dynamic content injected by JS -->
+    </div>
+
+  </div><!-- #main -->
+
+  <!-- ── Bottom Nav ─────────────────────────────── -->
+  <div id="bottom-nav">
+    <button class="nav-btn active" id="nb-map" onclick="switchView('map')">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="3 6 9 3 15 6 21 3 21 18 15 21 9 18 3 21"/><line x1="9" y1="3" x2="9" y2="18"/><line x1="15" y1="6" x2="15" y2="21"/></svg>
+      מפה
+    </button>
+    <button class="nav-btn" id="nb-draw" onclick="switchView('draw')">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9M16.5 3.5a2.121 2.121 0 013 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+      ציור
+    </button>
+    <button class="nav-btn" id="nb-trips" onclick="switchView('trips')">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>
+      טיולים
+    </button>
+    <button class="nav-btn" id="nb-discover" onclick="switchView('discover')">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88"/></svg>
+      גלה
+    </button>
+    <button class="nav-btn" id="nb-profile" onclick="switchView('profile')">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+      פרופיל
+    </button>
+  </div>
+
+</div><!-- #shell -->
+
+<!-- ── Auth Screen ──────────────────────────────── -->
+<div id="auth-screen">
+  <div class="auth-logo">🥾</div>
+  <div class="auth-title">שבילי ישראל</div>
+  <div class="auth-sub">תעד, שתף ודרג את הטיולים שלך<br>ברחבי ארץ ישראל</div>
+  <div class="auth-form">
+    <div class="auth-tabs">
+      <button class="auth-tab active" onclick="authTab('login')">התחברות</button>
+      <button class="auth-tab" onclick="authTab('register')">הרשמה</button>
+    </div>
+    <div id="af-login">
+      <input class="auth-input" id="a-email" type="email" placeholder="אימייל" dir="ltr"/>
+      <input class="auth-input" id="a-pass" type="password" placeholder="סיסמה" dir="ltr"/>
+      <button class="auth-submit" onclick="doLogin()">התחבר</button>
+    </div>
+    <div id="af-reg" style="display:none">
+      <input class="auth-input" id="r-name" type="text" placeholder="שם מלא"/>
+      <input class="auth-input" id="r-email" type="email" placeholder="אימייל" dir="ltr"/>
+      <input class="auth-input" id="r-pass" type="password" placeholder="סיסמה (6+ תווים)" dir="ltr"/>
+      <button class="auth-submit" onclick="doRegister()">הרשמה</button>
+    </div>
+    <button class="auth-google" onclick="doGoogleLogin()">
+      <svg width="18" height="18" viewBox="0 0 24 24"><path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/><path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/><path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/></svg>
+      המשך עם Google
+    </button>
+    <div class="auth-skip" onclick="skipAuth()">המשך ללא חשבון ←</div>
+  </div>
+</div>
+
+<!-- ── Toast ──────────────────────────────────────── -->
+<div id="toast"></div>
+
+<!-- ════════════════════════════════════════════════════
+     JAVASCRIPT
+════════════════════════════════════════════════════ -->
+<script>
+'use strict';
+
+// ══════════════════════════════════════════════════════════
+// STATE
+// ══════════════════════════════════════════════════════════
+const S = {
+  user: null,
+  trips: [],          // personal trips
+  community: [],      // community trips
+  currentView: 'map', // map | draw | trips | discover | profile
+  currentMode: 'pan', // pan | free | snap
+  routeCoords: [],
+  routeDistKm: 0,
+  mapReady: false,
+  // temp form state
+  pendingRoute: null,
+  selectedEmoji: '🥾',
+  myRating: 0,
+  currentTripId: null,
+};
+
+// ══════════════════════════════════════════════════════════
+// STORAGE
+// ══════════════════════════════════════════════════════════
+const LS = {
+  get:  k => { try { return JSON.parse(localStorage.getItem(k)); } catch { return null; } },
+  set:  (k,v) => { try { localStorage.setItem(k,JSON.stringify(v)); } catch {} },
+};
+function persist() { LS.set('shvilim_trips', S.trips); }
+function persistCom() { LS.set('shvilim_community', S.community); }
+
+function loadData() {
+  S.user      = LS.get('shvilim_user');
+  S.trips     = LS.get('shvilim_trips')     || [];
+  S.community = LS.get('shvilim_community') || defaultCommunity();
+}
+
+function defaultCommunity() {
+  return [
+    { id:'c1', author:'דן כהן', authorInit:'ד', title:'נחל עין גדי — הנחל העליון', region:'ים המלח', difficulty:'medium', distance:6.5, duration:'3:30', date:'2024-12-10', rating:4.7, ratingCount:23, done:false, emoji:'🏞', desc:'מסלול מרהיב לאורך נחל עין גדי עם בריכות שחיה טבעיות. המים גבוהים בחורף!', tags:['מים','צל','יפה'], waterLevel:'גבוה', weather:'שמשי 22°', notes:'', waterPoints:'גב בק"מ 2 ובסוף המסלול', camping:'', cost:'29 ₪ כניסה', ratings:{difficulty:3,beauty:5,water:5,crowd:2,shade:4,safety:4}, updates:[{type:'water',text:'גב מלא! מים מהנה',user:'יוסי לוי',date:'08/12/2024'},{type:'done',text:'מסלול פנוי, מומלץ!',user:'שרה כהן',date:'09/12/2024'}] },
+    { id:'c2', author:'מיכל לוי', authorInit:'מ', title:'שביל הגיר — הרי יהודה', region:'יהודה', difficulty:'hard', distance:14.2, duration:'7:00', date:'2024-11-22', rating:4.5, ratingCount:11, done:false, emoji:'⛰', desc:'מסלול מאתגר עם נוף פנורמי מרהיב. דרוש ציוד וניסיון.', tags:['מאתגר','נוף','קשה'], waterLevel:'יבש', weather:'מעונן 16°', notes:'חובה לקחת מים!', waterPoints:'אין — קח 3 ליטר', camping:'אפשרי ליד הפסגה', cost:'ללא', ratings:{difficulty:5,beauty:4,water:1,crowd:2,shade:2,safety:3}, updates:[{type:'block',text:'סלע חוסם ב-ק"מ 8, אפשר לעקוף',user:'אבי שמש',date:'20/11/2024'}] },
+    { id:'c3', author:'רוני שמש', authorInit:'ר', title:'נחל קנה — שמורת הכרמל', region:'כרמל', difficulty:'easy', distance:4.8, duration:'2:00', date:'2024-12-01', rating:4.9, ratingCount:47, done:false, emoji:'🌿', desc:'מסלול קל ומתאים למשפחות עם ילדים. יש צל ומים לאורך כל הדרך.', tags:['משפחות','קל','מים','צל'], waterLevel:'מלא', weather:'מעונן קל 18°', notes:'מומלץ בחול בשבוע', waterPoints:'נחל לאורך כל הדרך', camping:'', cost:'ללא', ratings:{difficulty:1,beauty:4,water:5,crowd:4,shade:5,safety:5}, updates:[{type:'crowd',text:'המון אנשים בסופ"ש',user:'נועה אורן',date:'01/12/2024'}] },
+    { id:'c4', author:'תמר אורן', authorInit:'ת', title:'הר מירון — פסגת הגליל', region:'גליל', difficulty:'medium', distance:9.0, duration:'4:30', date:'2024-10-15', rating:4.6, ratingCount:33, done:false, emoji:'🏔', desc:'עלייה לפסגת הר מירון עם נוף לכנרת. הכי יפה בסתיו.', tags:['גליל','נוף','כנרת'], waterLevel:'נמוך', weather:'שמשי 14°', notes:'עלייה מתונה אך ארוכה', waterPoints:'מעיין בתחתית', camping:'', cost:'ללא', ratings:{difficulty:3,beauty:5,water:2,crowd:3,shade:3,safety:4}, updates:[] },
+  ];
+}
+
+// ══════════════════════════════════════════════════════════
+// MAP BRIDGE — postMessage to/from iframe
+// ══════════════════════════════════════════════════════════
+const frame = document.getElementById('map-frame');
+
+/** Send a command to the map iframe */
+function mapCmd(type, value) {
+  if (!frame.contentWindow) return;
+  const msg = (typeof value === 'string') ? { type, mode: value } : { type, ...(value||{}) };
+  frame.contentWindow.postMessage(msg, '*');
+}
+
+/** Listen for messages FROM the map */
+window.addEventListener('message', e => {
+  const m = e.data;
+  if (!m || !m.type) return;
+
+  switch (m.type) {
+
+    case 'MAP_READY':
+      S.mapReady = true;
+      break;
+
+    case 'MODE_CHANGED':
+      S.currentMode = m.mode;
+      updateModeUI(m.mode);
+      break;
+
+    case 'ROUTE_UPDATED':
+      S.routeDistKm = m.distanceKm;
+      if (m.distanceKm > 0) {
+        const badge = document.getElementById('route-badge');
+        badge.classList.add('visible');
+        document.getElementById('route-badge-dist').textContent = m.distanceKm.toFixed(2);
+        document.getElementById('route-badge-sub').textContent = `ק"מ · ${m.pointCount} נקודות`;
+      } else {
+        document.getElementById('route-badge').classList.remove('visible');
+      }
+      break;
+
+    case 'ROUTE_DATA':
+      // Response to GET_ROUTE; used by save-trip flow
+      S.routeCoords  = m.coords      || [];
+      S.routeDistKm  = m.distanceKm  || 0;
+      S.pendingRoute = m;
+      if (S._routeCallback) { S._routeCallback(m); S._routeCallback = null; }
+      break;
+
+    case 'STATUS':
+      showStatusBar(m.msg);
+      break;
+
+    case 'SNAP_STATUS':
+      document.getElementById('snap-badge-msg').textContent = m.msg;
+      break;
+  }
+});
+
+/** Request route then call callback */
+function getRoute(cb) {
+  S._routeCallback = cb;
+  mapCmd('GET_ROUTE');
+  // timeout fallback
+  setTimeout(() => { if (S._routeCallback) { S._routeCallback({ coords:[], distanceKm:0 }); S._routeCallback=null; } }, 3000);
+}
+
+function updateModeUI(mode) {
+  ['pan','free','snap'].forEach(m => {
+    const b = document.getElementById('tb-'+m);
+    if (b) b.className = 'tool-btn' + (m===mode ? ` mode-${m}` : '');
+  });
+  const snapBadge = document.getElementById('snap-badge');
+  if (mode === 'snap') snapBadge.classList.add('visible');
+  else snapBadge.classList.remove('visible');
+}
+
+// ══════════════════════════════════════════════════════════
+// VIEWS
+// ══════════════════════════════════════════════════════════
+function switchView(view) {
+  S.currentView = view;
+
+  // Update nav buttons
+  ['map','draw','trips','discover','profile'].forEach(v => {
+    const b = document.getElementById('nb-'+v);
+    if (b) b.className = 'nav-btn' + (v===view ? (v==='draw'?' active-green':' active') : '');
+  });
+
+  // Show/hide map iframe
+  const mapFrame = document.getElementById('map-frame');
+  const isMapView = (view === 'map' || view === 'draw');
+  mapFrame.classList.toggle('hidden', !isMapView);
+
+  // Show/hide drawing toolbar
+  const toolbar = document.getElementById('map-toolbar');
+  toolbar.classList.toggle('visible', view === 'draw');
+
+  // Show/hide status bar and route badge in map views
+  document.getElementById('status-bar').classList.toggle('visible', isMapView);
+
+  // Handle overlay panel views
+  const overlay = document.getElementById('overlay');
+  if (!isMapView) {
+    overlay.classList.add('show');
+    if (view === 'trips')    renderTripsPanel();
+    if (view === 'discover') renderDiscoverPanel();
+    if (view === 'profile')  renderProfilePanel();
+  } else {
+    overlay.classList.remove('show');
+    overlay.innerHTML = '';
+  }
+
+  // When entering draw mode, tell the map
+  if (view === 'draw') {
+    mapCmd('SET_MODE', 'pan');
+  }
+}
+
+function closePanel() {
+  // Return to map view without resetting map
+  S.currentView = 'map';
+  document.getElementById('overlay').classList.remove('show');
+  document.getElementById('overlay').innerHTML = '';
+  document.getElementById('map-frame').classList.remove('hidden');
+  document.getElementById('map-toolbar').classList.remove('visible');
+  ['map','draw','trips','discover','profile'].forEach(v => {
+    const b = document.getElementById('nb-'+v);
+    if (b) b.className = 'nav-btn';
+  });
+  document.getElementById('nb-map').classList.add('active');
+}
+
+function showStatusBar(msg) {
+  const bar = document.getElementById('status-bar');
+  bar.textContent = msg;
+  bar.classList.add('visible');
+}
+
+// ══════════════════════════════════════════════════════════
+// SEARCH (forwards query to map — the iframe handles geocoding)
+// ══════════════════════════════════════════════════════════
+function handleSearch() {
+  const q = document.getElementById('search-input').value.trim();
+  if (!q) return;
+  // If we're not on a map view, switch there first
+  if (S.currentView !== 'map' && S.currentView !== 'draw') switchView('map');
+  // Send the query to the iframe (map.html has its own Nominatim search)
+  mapCmd('SEARCH', { query: q });
+  // Also filter trips locally
+  const results = [...S.trips, ...S.community].filter(t =>
+    t.title.includes(q) || (t.region||'').includes(q) || (t.desc||'').includes(q)
+  );
+  if (results.length) toast(`נמצאו ${results.length} מסלולים — פתח "טיולים" לצפייה`);
+}
+
+// ══════════════════════════════════════════════════════════
+// GPX
+// ══════════════════════════════════════════════════════════
+function handleGPXFile(file) {
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    try {
+      const parser = new DOMParser();
+      const xml = parser.parseFromString(e.target.result, 'text/xml');
+      const trkpts = xml.querySelectorAll('trkpt');
+      if (!trkpts.length) { toast('❌ אין נקודות ב-GPX'); return; }
+      const coords = Array.from(trkpts).map(p => ({
+        lat: parseFloat(p.getAttribute('lat')),
+        lng: parseFloat(p.getAttribute('lon')),
+      }));
+      mapCmd('IMPORT_GPX_DATA', { coords });
+      toast(`✓ ${coords.length} נקודות יובאו`);
+    } catch { toast('❌ שגיאה בפתיחת GPX'); }
+  };
+  reader.readAsText(file);
+}
+
+function exportGPX(coords) {
+  if (!coords || coords.length < 2) { toast('⚠️ אין נקודות לייצוא'); return; }
+  let g = `<?xml version="1.0" encoding="UTF-8"?>\n<gpx version="1.1" creator="שבילי ישראל" xmlns="http://www.topografix.com/GPX/1/1">\n  <trk><name>מסלול</name><trkseg>\n`;
+  for (const p of coords) g += `    <trkpt lat="${p.lat.toFixed(7)}" lon="${(p.lng||p.lon).toFixed(7)}"></trkpt>\n`;
+  g += `  </trkseg></trk>\n</gpx>`;
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([g], { type:'application/gpx+xml' }));
+  a.download = 'מסלול.gpx';
+  a.click();
+  toast('✓ GPX יוצא');
+}
+
+// ══════════════════════════════════════════════════════════
+// AUTH
+// ══════════════════════════════════════════════════════════
+function onUserPill() {
+  if (S.user) switchView('profile');
+  else document.getElementById('auth-screen').classList.add('show');
+}
+function authTab(tab) {
+  document.querySelectorAll('.auth-tab').forEach((t,i) => t.classList.toggle('active', (tab==='login'&&i===0)||(tab==='register'&&i===1)));
+  document.getElementById('af-login').style.display = tab==='login' ? '' : 'none';
+  document.getElementById('af-reg').style.display   = tab==='register' ? '' : 'none';
+}
+function doLogin() {
+  const email = document.getElementById('a-email').value.trim();
+  const pass  = document.getElementById('a-pass').value;
+  if (!email||!pass) { toast('⚠️ נא למלא את כל השדות'); return; }
+  const users = LS.get('shvilim_users') || {};
+  if (!users[email] || users[email].pass !== pass) { toast('❌ אימייל או סיסמה שגויים'); return; }
+  loginUser({ email, name: users[email].name, init: users[email].name[0] });
+}
+function doRegister() {
+  const name  = document.getElementById('r-name').value.trim();
+  const email = document.getElementById('r-email').value.trim();
+  const pass  = document.getElementById('r-pass').value;
+  if (!name||!email||pass.length<6) { toast('⚠️ נא למלא את כל השדות (סיסמה 6+ תווים)'); return; }
+  const users = LS.get('shvilim_users') || {};
+  if (users[email]) { toast('❌ אימייל כבר קיים'); return; }
+  users[email] = { name, pass };
+  LS.set('shvilim_users', users);
+  loginUser({ email, name, init: name[0] });
+  toast('🎉 ברוך הבא, '+name+'!');
+}
+function doGoogleLogin() {
+  loginUser({ email:'google@shvilim.app', name:'משתמש Google', init:'G' });
+  toast('✓ מחובר דרך Google');
+}
+function skipAuth() {
+  loginUser({ email:'', name:'אורח', init:'א', guest:true });
+}
+function loginUser(user) {
+  S.user = user;
+  LS.set('shvilim_user', user);
+  document.getElementById('auth-screen').classList.remove('show');
+  updateUserUI();
+  toast('שלום, '+user.name+'! 👋');
+}
+function logout() {
+  S.user = null;
+  LS.set('shvilim_user', null);
+  updateUserUI();
+  closePanel();
+  toast('התנתקת');
+}
+function updateUserUI() {
+  const u = S.user;
+  document.getElementById('avatar-top').textContent = u ? u.init : '?';
+  document.getElementById('name-top').textContent   = u ? u.name.split(' ')[0] : 'כניסה';
+}
+function requireAuth(cb) {
+  if (S.user && !S.user.guest) { cb(); return; }
+  toast('⚠️ יש להתחבר כדי לבצע פעולה זו');
+  setTimeout(() => document.getElementById('auth-screen').classList.add('show'), 800);
+}
+
+// ══════════════════════════════════════════════════════════
+// TRIPS PANEL
+// ══════════════════════════════════════════════════════════
+function renderTripsPanel() {
+  const ov = document.getElementById('overlay');
+  ov.innerHTML = `
+    <div class="panel-header">
+      <button class="panel-back" onclick="closePanel()">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M15 18l-6-6 6-6"/></svg>
+      </button>
+      <div class="panel-title">הטיולים שלי 🥾</div>
+      <button class="panel-action" onclick="openAddTripForm()">+ הוסף</button>
+    </div>
+    <div class="tab-bar">
+      <button class="tab-btn active" onclick="switchTab(this,'tp-mine')">שלי</button>
+      <button class="tab-btn" onclick="switchTab(this,'tp-community')">קהילה</button>
+      <button class="tab-btn" onclick="switchTab(this,'tp-stats')">סטטיסטיקות</button>
+    </div>
+    <div id="tp-mine" class="tab-pane active">
+      <div class="filters-row">
+        <button class="filter-chip on" onclick="filterMyTrips(this,'all')">הכל</button>
+        <button class="filter-chip" onclick="filterMyTrips(this,'done')">✓ בוצעו</button>
+        <button class="filter-chip" onclick="filterMyTrips(this,'easy')">קל</button>
+        <button class="filter-chip" onclick="filterMyTrips(this,'medium')">בינוני</button>
+        <button class="filter-chip" onclick="filterMyTrips(this,'hard')">קשה</button>
+      </div>
+      <div id="my-trips-list">
+        ${renderTripList(S.trips, true)}
+      </div>
+    </div>
+    <div id="tp-community" class="tab-pane">
+      <div class="filters-row">
+        <button class="filter-chip on" onclick="filterCom(this,'all')">הכל</button>
+        <button class="filter-chip" onclick="filterCom(this,'ים המלח')">ים המלח</button>
+        <button class="filter-chip" onclick="filterCom(this,'גליל')">גליל</button>
+        <button class="filter-chip" onclick="filterCom(this,'כרמל')">כרמל</button>
+        <button class="filter-chip" onclick="filterCom(this,'יהודה')">יהודה</button>
+        <button class="filter-chip" onclick="filterCom(this,'נגב')">נגב</button>
+      </div>
+      <div id="community-list">
+        ${renderTripList(S.community, false)}
+      </div>
+    </div>
+    <div id="tp-stats" class="tab-pane">
+      ${renderStats()}
+    </div>
+  `;
+}
+
+function renderTripList(trips, isMine) {
+  if (!trips.length) return `<div class="empty-state"><div class="empty-icon">${isMine?'🗺':'🌍'}</div><div class="empty-title">${isMine?'אין טיולים עדיין':'אין מסלולים'}</div><div class="empty-text">${isMine?'ציירו מסלול ושמרו, או הוסיפו ידנית':'הקהילה ריקה'}</div></div>`;
+  return trips.map(t => `
+    <div class="card" onclick="openTripDetail('${t.id}')">
+      <div class="card-thumb">${t.emoji||'🥾'}</div>
+      <div class="card-body">
+        <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px">
+          <div class="card-title">${t.title}</div>
+          ${t.done ? '<span class="tag done">✓ בוצע</span>' : ''}
+        </div>
+        <div class="card-meta">
+          <span>📍 ${t.region||'ישראל'}</span>
+          <span>📏 ${t.distance||'?'} ק"מ</span>
+          ${t.duration ? `<span>⏱ ${t.duration}</span>` : ''}
+          ${t.date ? `<span>📅 ${t.date}</span>` : ''}
+        </div>
+        ${t.rating ? `<div style="font-size:12px;color:var(--gold);margin-bottom:4px">${'⭐'.repeat(Math.round(t.rating))} <span style="color:var(--text-muted)">${Number(t.rating).toFixed(1)} (${t.ratingCount||1})</span></div>` : ''}
+        <div class="card-tags">
+          ${t.difficulty ? `<span class="tag ${t.difficulty}">${{easy:'קל',medium:'בינוני',hard:'קשה'}[t.difficulty]}</span>` : ''}
+          ${(t.tags||[]).slice(0,3).map(x=>`<span class="tag">${x}</span>`).join('')}
+        </div>
+        ${!isMine ? `<div style="margin-top:6px;font-size:11px;color:var(--text-muted)">by ${t.author}</div>` : ''}
+      </div>
+    </div>`).join('');
+}
+
+function switchTab(btn, paneId) {
+  btn.closest('.tab-bar').querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
+  document.getElementById(paneId).classList.add('active');
+}
+
+function filterMyTrips(btn, f) {
+  btn.closest('.filters-row').querySelectorAll('.filter-chip').forEach(c => c.classList.remove('on'));
+  btn.classList.add('on');
+  const trips = f==='all' ? S.trips : S.trips.filter(t => f==='done' ? t.done : t.difficulty===f);
+  document.getElementById('my-trips-list').innerHTML = renderTripList(trips, true);
+}
+function filterCom(btn, f) {
+  btn.closest('.filters-row').querySelectorAll('.filter-chip').forEach(c => c.classList.remove('on'));
+  btn.classList.add('on');
+  const trips = f==='all' ? S.community : S.community.filter(t => t.region===f);
+  document.getElementById('community-list').innerHTML = renderTripList(trips, false);
+}
+
+function renderStats() {
+  const trips = S.trips;
+  if (!trips.length) return `<div class="empty-state"><div class="empty-icon">📊</div><div class="empty-title">אין נתונים</div><div class="empty-text">הוסף טיולים כדי לראות סטטיסטיקות</div></div>`;
+  const done = trips.filter(t=>t.done).length;
+  const km = trips.reduce((a,t)=>a+(parseFloat(t.distance)||0),0).toFixed(1);
+  const regions = {};
+  trips.forEach(t => { if(t.region) regions[t.region] = (regions[t.region]||0)+1; });
+  return `
+    <div class="stats-grid">
+      <div class="stat-card"><div class="stat-icon">🥾</div><div class="stat-num">${trips.length}</div><div class="stat-lbl">טיולים</div></div>
+      <div class="stat-card"><div class="stat-icon">✅</div><div class="stat-num">${done}</div><div class="stat-lbl">בוצעו</div></div>
+      <div class="stat-card"><div class="stat-icon">📏</div><div class="stat-num">${km}</div><div class="stat-lbl">ק"מ</div></div>
+      <div class="stat-card"><div class="stat-icon">📍</div><div class="stat-num">${Object.keys(regions).length}</div><div class="stat-lbl">אזורים</div></div>
+    </div>
+    <div style="padding:12px">
+      <div class="section-hdr" style="padding:0 0 10px"><div class="section-ttl">חלוקה לפי אזורים</div></div>
+      ${Object.entries(regions).map(([r,c])=>`
+        <div style="margin-bottom:12px">
+          <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--text-main);margin-bottom:4px"><span>${r}</span><span style="color:var(--text-muted)">${c}</span></div>
+          <div class="prog-wrap"><div class="prog-bar" style="width:${Math.round(c/trips.length*100)}%"></div></div>
+        </div>`).join('')}
+    </div>
+  `;
+}
+
+// ══════════════════════════════════════════════════════════
+// TRIP DETAIL
+// ══════════════════════════════════════════════════════════
+function openTripDetail(id) {
+  const trip = [...S.trips, ...S.community].find(t=>t.id===id);
+  if (!trip) return;
+  S.currentTripId = id;
+  S.myRating = 0;
+  const isMine = S.trips.some(t=>t.id===id);
+  const diffMap = { easy:'קל', medium:'בינוני', hard:'קשה' };
+  const ratings = trip.ratings || {};
+  const rl = { difficulty:'קושי', beauty:'יופי', water:'מים', crowd:'עומס', shade:'הצללה', safety:'בטיחות' };
+
+  const ov = document.getElementById('overlay');
+  ov.innerHTML = `
+    <div class="panel-header">
+      <button class="panel-back" onclick="renderTripsPanel()">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M15 18l-6-6 6-6"/></svg>
+      </button>
+      <div class="panel-title" style="font-size:15px">${trip.title}</div>
+      ${isMine
+        ? `<button class="panel-action" onclick="openAddTripForm('${id}')">✏️ ערוך</button>`
+        : `<button class="panel-action" style="background:var(--blue-dim);color:#bfdbfe;border:1px solid var(--blue)" onclick="copyToMine()">+ שמור</button>`
+      }
+    </div>
+    <div style="overflow-y:auto;flex:1;-webkit-overflow-scrolling:touch">
+
+      <!-- Hero -->
+      <div class="trip-hero">
+        <span style="position:relative;z-index:1;font-size:72px">${trip.emoji||'🥾'}</span>
+        <div style="position:absolute;bottom:10px;right:10px;display:flex;gap:8px;z-index:2">
+          ${isMine ? `<button onclick="toggleDone('${id}')" style="background:rgba(10,22,40,0.9);border:1px solid var(--border);border-radius:8px;padding:6px 12px;color:var(--text-main);font-size:12px;font-weight:700;cursor:pointer;font-family:inherit">${trip.done?'✅ בוצע':'◻ סמן כבוצע'}</button>` : ''}
+          <button onclick="showOnMap('${id}')" style="background:rgba(10,22,40,0.9);border:1px solid var(--border);border-radius:8px;padding:6px 12px;color:var(--text-main);font-size:12px;font-weight:700;cursor:pointer;font-family:inherit">🗺 מפה</button>
+          <button onclick="shareTrip('${id}')" style="background:rgba(10,22,40,0.9);border:1px solid var(--border);border-radius:8px;padding:6px 12px;color:var(--text-main);font-size:12px;font-weight:700;cursor:pointer;font-family:inherit">📤 שתף</button>
+        </div>
+      </div>
+
+      <!-- Info grid -->
+      <div class="trip-info-grid">
+        <div class="tic"><div class="tic-v">${trip.distance||'?'}</div><div class="tic-l">ק"מ</div></div>
+        <div class="tic"><div class="tic-v">${trip.duration||'?'}</div><div class="tic-l">זמן</div></div>
+        <div class="tic"><div class="tic-v">${diffMap[trip.difficulty]||'?'}</div><div class="tic-l">קושי</div></div>
+        <div class="tic"><div class="tic-v">${trip.region||'?'}</div><div class="tic-l">אזור</div></div>
+        <div class="tic"><div class="tic-v">${trip.date||'?'}</div><div class="tic-l">תאריך</div></div>
+        <div class="tic"><div class="tic-v">${trip.weather||'?'}</div><div class="tic-l">מזג אוויר</div></div>
+      </div>
+
+      <!-- Rating -->
+      ${trip.rating ? `
+      <div style="padding:14px;display:flex;align-items:center;gap:12px;border-bottom:1px solid var(--border)">
+        <div style="font-size:32px;font-weight:900;color:var(--gold)">${Number(trip.rating).toFixed(1)}</div>
+        <div>
+          <div style="display:flex;gap:4px;font-size:18px">${[1,2,3,4,5].map(i=>`<span style="color:${i<=Math.round(trip.rating)?'var(--gold)':'var(--text-muted)'}">${i<=Math.round(trip.rating)?'★':'☆'}</span>`).join('')}</div>
+          <div style="font-size:11px;color:var(--text-muted)">${trip.ratingCount||1} דירוגים</div>
+        </div>
+      </div>` : ''}
+
+      <!-- Description -->
+      ${trip.desc ? `<div style="padding:14px;font-size:14px;color:var(--text-main);line-height:1.7;border-bottom:1px solid var(--border)">${trip.desc}</div>` : ''}
+
+      <!-- Details -->
+      <div style="padding:14px;border-bottom:1px solid var(--border)">
+        ${trip.waterPoints ? `<div style="margin-bottom:8px;font-size:13px">💧 <b style="color:var(--text-hi)">נקודות מים:</b> ${trip.waterPoints}</div>` : ''}
+        ${trip.camping     ? `<div style="margin-bottom:8px;font-size:13px">🏕 <b style="color:var(--text-hi)">חניוני לילה:</b> ${trip.camping}</div>` : ''}
+        ${trip.cost        ? `<div style="margin-bottom:8px;font-size:13px">💰 <b style="color:var(--text-hi)">עלות:</b> ${trip.cost}</div>` : ''}
+        ${trip.notes       ? `<div style="font-size:13px">📝 <b style="color:var(--text-hi)">הערות:</b> ${trip.notes}</div>` : ''}
+      </div>
+
+      <!-- Ratings breakdown -->
+      ${Object.keys(ratings).length ? `
+      <div style="padding:14px;border-bottom:1px solid var(--border)">
+        <div class="section-hdr" style="padding:0 0 10px"><div class="section-ttl">דירוגים מפורטים</div></div>
+        ${Object.entries(rl).filter(([k])=>ratings[k]).map(([k,label])=>`
+          <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
+            <div style="font-size:12px;color:var(--text-main);min-width:68px">${label}</div>
+            <div class="prog-wrap" style="flex:1"><div class="prog-bar" style="width:${ratings[k]*20}%"></div></div>
+            <div style="font-size:12px;font-weight:700;color:var(--accent);min-width:16px">${ratings[k]}</div>
+          </div>`).join('')}
+      </div>` : ''}
+
+      <!-- Field updates -->
+      ${(trip.updates||[]).length ? `
+      <div style="padding:14px;border-bottom:1px solid var(--border)">
+        <div class="section-hdr" style="padding:0 0 10px"><div class="section-ttl">עדכוני שטח</div></div>
+        ${trip.updates.map(u=>`
+          <div style="display:flex;gap:10px;margin-bottom:10px;align-items:flex-start">
+            <span class="update-chip ${u.type==='water'?'chip-water':u.type==='block'?'chip-block':u.type==='crowd'?'chip-crowd':'chip-done'}">${{water:'💧 מים',block:'🚫 חסימה',crowd:'👥 עומס',done:'✅ בוצע'}[u.type]||'📢'}</span>
+            <div>
+              <div style="font-size:13px;color:var(--text-main)">${u.text}</div>
+              <div style="font-size:11px;color:var(--text-muted)">${u.user} · ${u.date}</div>
+            </div>
+          </div>`).join('')}
+      </div>` : ''}
+
+      <!-- Add update -->
+      <div style="padding:14px;border-bottom:1px solid var(--border)">
+        <div class="section-hdr" style="padding:0 0 10px"><div class="section-ttl">הוסף עדכון שטח</div></div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">
+          ${[['water','💧 גב מלא'],['block','🚫 חסימה'],['crowd','👥 עומס'],['done','✅ סיימתי']].map(([t,l])=>`
+            <button onclick="prefillUpdate('${id}','${t}')" style="padding:8px 12px;border-radius:9px;border:1px solid var(--border);background:var(--bg-card);color:var(--text-main);font-size:12px;cursor:pointer;font-family:inherit">${l}</button>`).join('')}
+        </div>
+        <div style="display:flex;gap:8px">
+          <input id="update-inp" style="flex:1;padding:9px 12px;border-radius:9px;border:1px solid var(--border);background:var(--bg-card);color:var(--text-hi);font-size:13px;font-family:inherit;outline:none" placeholder="תיאור קצר..."/>
+          <button onclick="submitUpdate('${id}')" style="padding:9px 16px;border-radius:9px;border:none;background:var(--accent);color:#fff;font-weight:700;font-size:13px;cursor:pointer;font-family:inherit">שלח</button>
+        </div>
+      </div>
+
+      <!-- Rate -->
+      <div style="padding:14px;border-bottom:1px solid var(--border)">
+        <div class="section-hdr" style="padding:0 0 10px"><div class="section-ttl">דרג את המסלול</div></div>
+        <div class="stars-row" id="my-stars">
+          ${[1,2,3,4,5].map(i=>`<span class="s" onclick="setRating(${i})" onmouseover="hoverRating(${i})" onmouseout="unhover()">☆</span>`).join('')}
+        </div>
+        <button onclick="submitRating('${id}')" style="margin-top:12px;padding:10px 24px;border-radius:10px;border:none;background:var(--gold);color:#fff;font-weight:800;font-size:14px;cursor:pointer;font-family:inherit">שמור דירוג</button>
+      </div>
+
+      <!-- Export actions -->
+      ${(trip.routeCoords||[]).length ? `
+      <div style="padding:14px;display:flex;gap:10px;flex-wrap:wrap">
+        <button onclick="exportGPX(${JSON.stringify(trip.routeCoords)})" style="padding:9px 14px;border-radius:9px;border:1px solid var(--border);background:var(--bg-card);color:var(--text-main);font-size:12px;font-weight:700;cursor:pointer;font-family:inherit">⬇️ GPX</button>
+        <button onclick="openMaps('${id}')" style="padding:9px 14px;border-radius:9px;border:1px solid var(--border);background:var(--bg-card);color:var(--text-main);font-size:12px;font-weight:700;cursor:pointer;font-family:inherit">🗺 Google Maps</button>
+        <button onclick="openWaze('${id}')" style="padding:9px 14px;border-radius:9px;border:1px solid var(--border);background:var(--bg-card);color:var(--text-main);font-size:12px;font-weight:700;cursor:pointer;font-family:inherit">🚗 Waze</button>
+      </div>` : ''}
+
+      <div style="height:20px"></div>
+    </div>
+  `;
+}
+
+function setRating(v) {
+  S.myRating = v;
+  document.querySelectorAll('#my-stars .s').forEach((s,i) => {
+    s.textContent = i < v ? '★' : '☆';
+    s.classList.toggle('on', i < v);
+  });
+}
+function hoverRating(v) { document.querySelectorAll('#my-stars .s').forEach((s,i) => { s.style.color = i<v ? 'var(--gold)' : ''; }); }
+function unhover() { document.querySelectorAll('#my-stars .s').forEach((s,i) => { s.style.color = ''; }); }
+function submitRating(id) {
+  if (!S.myRating) { toast('⚠️ בחר דירוג'); return; }
+  const trip = [...S.trips, ...S.community].find(t=>t.id===id);
+  if (trip) {
+    const cnt = trip.ratingCount||0;
+    trip.rating = ((trip.rating||0)*cnt + S.myRating) / (cnt+1);
+    trip.ratingCount = cnt+1;
+    persist(); persistCom();
+  }
+  toast(`✓ דירוג ${S.myRating}/5 נשמר`);
+  setTimeout(() => openTripDetail(id), 500);
+}
+
+function prefillUpdate(id, type) {
+  const texts = { water:'גב מלא, מים יפים!', block:'שביל חסום, יש לעקוף', crowd:'הרבה מטיילים היום', done:'סיימתי את המסלול!' };
+  const inp = document.getElementById('update-inp');
+  if (inp) inp.value = texts[type]||'';
+}
+function submitUpdate(id) {
+  const inp = document.getElementById('update-inp');
+  const text = inp ? inp.value.trim() : '';
+  if (!text) { toast('⚠️ הכנס תיאור'); return; }
+  const typeMap = { מים:'water', חסום:'block', מטיילים:'crowd', סיימתי:'done' };
+  const type = Object.entries(typeMap).find(([k])=>text.includes(k))?.[1] || 'done';
+  const trip = [...S.trips, ...S.community].find(t=>t.id===id);
+  if (trip) {
+    if (!trip.updates) trip.updates = [];
+    trip.updates.unshift({ type, text, user: S.user?.name||'אורח', date: new Date().toLocaleDateString('he-IL') });
+    persist(); persistCom();
+  }
+  toast('✓ עדכון נשמר');
+  setTimeout(() => openTripDetail(id), 400);
+}
+
+function toggleDone(id) {
+  const trip = S.trips.find(t=>t.id===id);
+  if (trip) { trip.done = !trip.done; persist(); toast(trip.done?'✅ מסומן כבוצע':'◻ הוסר סימון'); setTimeout(()=>openTripDetail(id),400); }
+}
+function copyToMine() {
+  const trip = S.community.find(t=>t.id===S.currentTripId);
+  if (!trip) return;
+  const copy = { ...trip, id:'my_'+Date.now(), done:false, author:S.user?.name||'אורח' };
+  S.trips.push(copy); persist();
+  toast('✓ נשמר לטיולים שלי!');
+}
+function shareTrip(id) {
+  const trip = [...S.trips,...S.community].find(t=>t.id===id);
+  if (!trip) return;
+  if (navigator.share) {
+    navigator.share({ title: trip.title, text: `${trip.title} — ${trip.distance} ק"מ` }).catch(()=>{});
+  } else {
+    navigator.clipboard?.writeText(window.location.href).then(()=>toast('🔗 קישור הועתק')).catch(()=>toast('שתף: '+trip.title));
+  }
+}
+function showOnMap(id) {
+  const trip = [...S.trips,...S.community].find(t=>t.id===id);
+  closePanel();
+  if (trip?.startLatLng) mapCmd('FLY_TO', { lat: trip.startLatLng[0], lng: trip.startLatLng[1], zoom: 13 });
+  if (trip?.routeCoords?.length) {
+    mapCmd('CLEAR_DISPLAY_TRIPS');
+    mapCmd('SHOW_TRIP', { coords: trip.routeCoords });
+  }
+}
+function openMaps(id) {
+  const trip = [...S.trips,...S.community].find(t=>t.id===id);
+  if (trip?.startLatLng) window.open(`https://www.google.com/maps/dir/?api=1&destination=${trip.startLatLng[0]},${trip.startLatLng[1]}`,'_blank');
+}
+function openWaze(id) {
+  const trip = [...S.trips,...S.community].find(t=>t.id===id);
+  if (trip?.startLatLng) window.open(`https://waze.com/ul?ll=${trip.startLatLng[0]},${trip.startLatLng[1]}&navigate=yes`,'_blank');
+}
+
+// ══════════════════════════════════════════════════════════
+// DISCOVER PANEL
+// ══════════════════════════════════════════════════════════
+function renderDiscoverPanel() {
+  const ov = document.getElementById('overlay');
+  ov.innerHTML = `
+    <div class="panel-header">
+      <button class="panel-back" onclick="closePanel()">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M15 18l-6-6 6-6"/></svg>
+      </button>
+      <div class="panel-title">גלה מסלולים 🌍</div>
+    </div>
+    <div style="overflow-y:auto;flex:1">
+      <div style="padding:14px">
+        <div class="form-label" style="margin-bottom:8px">חיפוש לפי אזור</div>
+        <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:18px">
+          ${['גליל','כרמל','ים המלח','יהודה','ירושלים','נגב','גולן','שפלה','ערבה'].map(r=>`<button class="filter-chip" onclick="discoverByRegion('${r}')">${r}</button>`).join('')}
+        </div>
+        <div class="form-label" style="margin-bottom:8px">רמת קושי</div>
+        <div style="display:flex;gap:8px;margin-bottom:18px">
+          <button class="filter-chip easy" onclick="discoverByDiff('easy')">קל</button>
+          <button class="filter-chip medium" onclick="discoverByDiff('medium')">בינוני</button>
+          <button class="filter-chip hard" onclick="discoverByDiff('hard')">קשה</button>
+        </div>
+        <div class="form-label" style="margin-bottom:8px">אורך מסלול</div>
+        <div style="display:flex;gap:8px;margin-bottom:18px">
+          <button class="filter-chip" onclick="discoverByLength('short')">קצר (עד 5 ק"מ)</button>
+          <button class="filter-chip" onclick="discoverByLength('medium')">בינוני (5–12)</button>
+          <button class="filter-chip" onclick="discoverByLength('long')">ארוך (12+)</button>
+        </div>
+      </div>
+      <div id="discover-results">
+        <div class="section-hdr"><div class="section-ttl">⭐ מסלולים מומלצים</div></div>
+        ${renderTripList([...S.community].sort((a,b)=>b.rating-a.rating).slice(0,4), false)}
+      </div>
+    </div>
+  `;
+}
+
+function discoverByRegion(r) {
+  const res = document.getElementById('discover-results');
+  const t = S.community.filter(x=>x.region===r);
+  res.innerHTML = `<div class="section-hdr"><div class="section-ttl">📍 ${r}</div></div>${renderTripList(t,false)}`;
+}
+function discoverByDiff(d) {
+  const res = document.getElementById('discover-results');
+  const t = S.community.filter(x=>x.difficulty===d);
+  res.innerHTML = `<div class="section-hdr"><div class="section-ttl">${{easy:'🟢 קל',medium:'🟡 בינוני',hard:'🔴 קשה'}[d]}</div></div>${renderTripList(t,false)}`;
+}
+function discoverByLength(l) {
+  const res = document.getElementById('discover-results');
+  const t = S.community.filter(x=>{const km=parseFloat(x.distance)||0;return l==='short'?km<=5:l==='medium'?km>5&&km<=12:km>12;});
+  res.innerHTML = `<div class="section-hdr"><div class="section-ttl">📏 ${l==='short'?'קצר':l==='medium'?'בינוני':'ארוך'}</div></div>${renderTripList(t,false)}`;
+}
+
+// ══════════════════════════════════════════════════════════
+// PROFILE PANEL
+// ══════════════════════════════════════════════════════════
+function renderProfilePanel() {
+  const u = S.user;
+  const trips = S.trips;
+  const done = trips.filter(t=>t.done).length;
+  const km = trips.reduce((a,t)=>a+(parseFloat(t.distance)||0),0).toFixed(0);
+  const ov = document.getElementById('overlay');
+  ov.innerHTML = `
+    <div class="panel-header">
+      <button class="panel-back" onclick="closePanel()">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M15 18l-6-6 6-6"/></svg>
+      </button>
+      <div class="panel-title">פרופיל</div>
+      <button class="panel-action" style="background:var(--red)" onclick="logout()">התנתק</button>
+    </div>
+    <div style="overflow-y:auto;flex:1">
+      <div style="text-align:center;padding:32px 16px 20px;border-bottom:1px solid var(--border)">
+        <div style="width:72px;height:72px;border-radius:50%;background:linear-gradient(135deg,var(--blue),var(--accent));display:flex;align-items:center;justify-content:center;font-size:28px;font-weight:900;color:#fff;margin:0 auto 12px">${u?.init||'?'}</div>
+        <div style="font-size:22px;font-weight:900;color:var(--text-hi)">${u?.name||'אורח'}</div>
+        <div style="font-size:13px;color:var(--text-muted);margin-top:4px">${u?.email||''}</div>
+      </div>
+      <div class="stats-grid">
+        <div class="stat-card"><div class="stat-icon">🥾</div><div class="stat-num">${trips.length}</div><div class="stat-lbl">טיולים</div></div>
+        <div class="stat-card"><div class="stat-icon">✅</div><div class="stat-num">${done}</div><div class="stat-lbl">בוצעו</div></div>
+        <div class="stat-card"><div class="stat-icon">📏</div><div class="stat-num">${km}</div><div class="stat-lbl">ק"מ</div></div>
+        <div class="stat-card"><div class="stat-icon">⭐</div><div class="stat-num">${(trips.reduce((a,t)=>a+(t.rating||0),0)/(trips.length||1)).toFixed(1)}</div><div class="stat-lbl">דירוג</div></div>
+      </div>
+
+      <div style="padding:14px;border-top:1px solid var(--border)">
+        <div class="section-hdr" style="padding:0 0 12px"><div class="section-ttl">ייבוא / ייצוא</div></div>
+        <div style="display:flex;gap:10px;flex-wrap:wrap">
+          <label style="padding:10px 16px;border-radius:9px;border:1px solid var(--border);background:var(--bg-card);color:var(--text-main);font-size:13px;font-weight:700;cursor:pointer">
+            📂 ייבא GPX
+            <input type="file" accept=".gpx,.kml" style="display:none" onchange="importGPXFromProfile(this.files[0])"/>
+          </label>
+          <button onclick="exportAllJSON()" style="padding:10px 16px;border-radius:9px;border:1px solid var(--border);background:var(--bg-card);color:var(--text-main);font-size:13px;font-weight:700;cursor:pointer;font-family:inherit">📤 ייצוא JSON</button>
+        </div>
+      </div>
+
+      <div style="padding:14px;border-top:1px solid var(--border)">
+        <div class="section-hdr" style="padding:0 0 12px"><div class="section-ttl">הגדרות</div></div>
+        <div class="toggle-row">
+          <label class="toggle"><input type="checkbox" id="pref-notif"><span class="toggle-track"></span></label>
+          <span class="toggle-lbl">התראות עדכוני שטח</span>
+        </div>
+        <div class="toggle-row">
+          <label class="toggle"><input type="checkbox" id="pref-offline"><span class="toggle-track"></span></label>
+          <span class="toggle-lbl">שמור מפות אופליין</span>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function importGPXFromProfile(file) {
+  if (!file) return;
+  closePanel();
+  switchView('draw');
+  setTimeout(() => handleGPXFile(file), 300);
+}
+function exportAllJSON() {
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([JSON.stringify(S.trips,null,2)],{type:'application/json'}));
+  a.download = 'shvilim_trips.json'; a.click();
+  toast('✓ יוצא');
+}
+
+// ══════════════════════════════════════════════════════════
+// SAVE TRIP (from drawn route)
+// ══════════════════════════════════════════════════════════
+function openSaveTrip() {
+  // Ask the map for current route coords
+  getRoute(data => {
+    if (!data.coords || data.coords.length < 2) {
+      toast('⚠️ ציירו קודם מסלול על המפה');
+      return;
+    }
+    S.pendingRoute = data;
+    openAddTripForm(null, data);
+  });
+}
+
+function openAddTripForm(editId = null, routeData = null) {
+  const existing = editId ? [...S.trips,...S.community].find(t=>t.id===editId) : null;
+  const rd = routeData || {};
+  S.selectedEmoji = existing?.emoji || '🥾';
+
+  const ov = document.getElementById('overlay');
+  ov.classList.add('show');
+  ov.innerHTML = `
+    <div class="panel-header">
+      <button class="panel-back" onclick="renderTripsPanel()">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M15 18l-6-6 6-6"/></svg>
+      </button>
+      <div class="panel-title">${existing ? 'ערוך טיול' : 'טיול חדש'}</div>
+      <button class="panel-action" onclick="saveTrip()">שמור</button>
+    </div>
+    <div style="overflow-y:auto;flex:1;-webkit-overflow-scrolling:touch">
+
+      ${rd.coords?.length ? `<div style="padding:12px 14px;background:rgba(34,197,94,0.1);border-bottom:1px solid rgba(34,197,94,0.3);font-size:13px;color:#86efac">✓ מסלול מצויר — ${rd.distanceKm} ק"מ · ${rd.coords.length} נקודות</div>` : ''}
+
+      <div style="padding:12px">
+        <div class="import-zone" onclick="document.getElementById('gpx-import-form').click()">
+          <div style="font-size:32px;margin-bottom:6px">📂</div>
+          <div style="font-size:13px;color:var(--text-muted)">לחץ לייבוא GPX / KML</div>
+          <input type="file" id="gpx-import-form" accept=".gpx,.kml" style="display:none" onchange="handleGPXFile(this.files[0])"/>
+        </div>
+      </div>
+
+      <div class="form-section">
+        <label class="form-label">שם הטיול *</label>
+        <input class="form-input" id="f-title" placeholder='למשל: "נחל עין גדי — הנחל העליון"' value="${existing?.title||''}"/>
+      </div>
+
+      <div class="form-section">
+        <label class="form-label">אמוג'י</label>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          ${['🥾','🏞','⛰','🌿','🏔','💧','🌄','🦅','🌵','🏝'].map(e=>`<button class="emoji-btn${e===S.selectedEmoji?' sel':''}" onclick="selectEmoji('${e}',this)">${e}</button>`).join('')}
+        </div>
+        <input type="hidden" id="f-emoji" value="${existing?.emoji||'🥾'}"/>
+      </div>
+
+      <div class="form-section">
+        <label class="form-label">תיאור</label>
+        <textarea class="form-textarea" id="f-desc" placeholder="תיאור, המלצות ותחושות...">${existing?.desc||''}</textarea>
+      </div>
+
+      <div class="form-row">
+        <div class="form-section">
+          <label class="form-label">אזור</label>
+          <select class="form-select" id="f-region">
+            ${['גליל','כרמל','ים המלח','יהודה','ירושלים','נגב','גולן','שפלה','ערבה','שרון'].map(r=>`<option ${r===existing?.region?'selected':''}>${r}</option>`).join('')}
+          </select>
+        </div>
+        <div class="form-section">
+          <label class="form-label">קושי</label>
+          <select class="form-select" id="f-diff">
+            <option value="easy" ${existing?.difficulty==='easy'?'selected':''}>קל</option>
+            <option value="medium" ${!existing||existing?.difficulty==='medium'?'selected':''}>בינוני</option>
+            <option value="hard" ${existing?.difficulty==='hard'?'selected':''}>קשה</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="form-row">
+        <div class="form-section">
+          <label class="form-label">מרחק (ק"מ)</label>
+          <input class="form-input" id="f-dist" type="number" step="0.1" value="${existing?.distance||rd.distanceKm||''}"/>
+        </div>
+        <div class="form-section">
+          <label class="form-label">זמן הליכה</label>
+          <input class="form-input" id="f-dur" placeholder="2:30" value="${existing?.duration||''}"/>
+        </div>
+      </div>
+
+      <div class="form-row">
+        <div class="form-section">
+          <label class="form-label">תאריך</label>
+          <input class="form-input" id="f-date" type="date" value="${existing?.date||new Date().toISOString().split('T')[0]}"/>
+        </div>
+        <div class="form-section">
+          <label class="form-label">מזג אוויר</label>
+          <input class="form-input" id="f-weather" placeholder='שמשי 22°' value="${existing?.weather||''}"/>
+        </div>
+      </div>
+
+      <div class="form-section">
+        <label class="form-label">נקודות מים</label>
+        <input class="form-input" id="f-water" value="${existing?.waterPoints||''}"/>
+      </div>
+      <div class="form-section">
+        <label class="form-label">חניוני לילה</label>
+        <input class="form-input" id="f-camp" value="${existing?.camping||''}"/>
+      </div>
+      <div class="form-section">
+        <label class="form-label">עלות משוערת</label>
+        <input class="form-input" id="f-cost" value="${existing?.cost||''}"/>
+      </div>
+      <div class="form-section">
+        <label class="form-label">הערות אישיות</label>
+        <textarea class="form-textarea" id="f-notes">${existing?.notes||''}</textarea>
+      </div>
+
+      <div style="padding:14px;border-top:1px solid var(--border)">
+        <div style="font-size:12px;font-weight:800;color:var(--text-muted);text-transform:uppercase;letter-spacing:.1em;margin-bottom:12px">דירוגים מפורטים</div>
+        ${[['difficulty','קושי'],['beauty','יופי'],['water','מים'],['crowd','עומס'],['shade','הצללה'],['safety','בטיחות']].map(([k,l])=>`
+          <div class="rating-row">
+            <span class="rating-lbl">${l}</span>
+            <input type="range" class="r-slider" min="1" max="5" id="r-${k}" value="${existing?.ratings?.[k]||3}" oninput="document.getElementById('rv-${k}').textContent=this.value"/>
+            <span class="r-val" id="rv-${k}">${existing?.ratings?.[k]||3}</span>
+          </div>`).join('')}
+      </div>
+
+      <div style="padding:14px;border-top:1px solid var(--border)">
+        <div class="toggle-row">
+          <label class="toggle"><input type="checkbox" id="f-done" ${existing?.done?'checked':''}><span class="toggle-track"></span></label>
+          <span class="toggle-lbl">סמן כ"בוצע"</span>
+        </div>
+        <div class="toggle-row">
+          <label class="toggle"><input type="checkbox" id="f-public" checked><span class="toggle-track"></span></label>
+          <span class="toggle-lbl">שתף עם הקהילה</span>
+        </div>
+      </div>
+
+      <div style="height:24px"></div>
+    </div>
+
+    <!-- hidden fields -->
+    <input type="hidden" id="f-edit-id" value="${editId||''}"/>
+    <input type="hidden" id="f-route" value='${JSON.stringify(rd.coords||existing?.routeCoords||[])}'>
+    <input type="hidden" id="f-start" value='${JSON.stringify(rd.startLatLng||existing?.startLatLng||null)}'>
+  `;
+}
+
+function selectEmoji(e, btn) {
+  S.selectedEmoji = e;
+  document.querySelectorAll('.emoji-btn').forEach(b => b.classList.remove('sel'));
+  btn.classList.add('sel');
+  document.getElementById('f-emoji').value = e;
+}
+
+function saveTrip() {
+  const title = document.getElementById('f-title').value.trim();
+  if (!title) { toast('⚠️ נא להכניס שם'); return; }
+  const editId = document.getElementById('f-edit-id').value;
+  const ratings = {};
+  ['difficulty','beauty','water','crowd','shade','safety'].forEach(k => {
+    const el = document.getElementById('r-'+k);
+    if (el) ratings[k] = parseInt(el.value);
+  });
+  const avgRating = Object.values(ratings).reduce((a,b)=>a+b,0) / 6;
+  const routeCoords = JSON.parse(document.getElementById('f-route').value||'[]');
+  const startLatLng = JSON.parse(document.getElementById('f-start').value||'null');
+
+  const trip = {
+    id:          editId || ('t_'+Date.now()),
+    title,
+    emoji:       document.getElementById('f-emoji').value || S.selectedEmoji,
+    desc:        document.getElementById('f-desc').value,
+    region:      document.getElementById('f-region').value,
+    difficulty:  document.getElementById('f-diff').value,
+    distance:    document.getElementById('f-dist').value,
+    duration:    document.getElementById('f-dur').value,
+    date:        document.getElementById('f-date').value,
+    weather:     document.getElementById('f-weather').value,
+    waterPoints: document.getElementById('f-water').value,
+    camping:     document.getElementById('f-camp').value,
+    cost:        document.getElementById('f-cost').value,
+    notes:       document.getElementById('f-notes').value,
+    done:        document.getElementById('f-done').checked,
+    routeCoords, startLatLng,
+    rating:      parseFloat(avgRating.toFixed(1)),
+    ratingCount: 1,
+    author:      S.user?.name || 'אורח',
+    authorInit:  S.user?.init || 'א',
+    ratings,
+    tags:        [],
+    updates:     [],
+  };
+
+  if (editId) {
+    const idx = S.trips.findIndex(t=>t.id===editId);
+    if (idx > -1) S.trips[idx] = trip;
+  } else {
+    S.trips.push(trip);
+  }
+
+  if (document.getElementById('f-public').checked) {
+    S.community.unshift(trip);
+    persistCom();
+  }
+  persist();
+  mapCmd('CLEAR_ROUTE');
+  document.getElementById('route-badge').classList.remove('visible');
+  toast('✓ הטיול נשמר!');
+  setTimeout(() => { switchView('trips'); }, 500);
+}
+
+// ══════════════════════════════════════════════════════════
+// TOAST
+// ══════════════════════════════════════════════════════════
+let _toastTimer;
+function toast(msg) {
+  clearTimeout(_toastTimer);
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.classList.add('show');
+  _toastTimer = setTimeout(() => el.classList.remove('show'), 2800);
+}
+
+// ══════════════════════════════════════════════════════════
+// PWA
+// ══════════════════════════════════════════════════════════
+let _deferredPrompt;
+window.addEventListener('beforeinstallprompt', e => {
+  e.preventDefault();
+  _deferredPrompt = e;
+  document.getElementById('install-banner').style.display = 'flex';
+});
+document.getElementById('ibtn').onclick = async () => {
+  if (!_deferredPrompt) return;
+  _deferredPrompt.prompt();
+  await _deferredPrompt.userChoice;
+  _deferredPrompt = null;
+  document.getElementById('install-banner').style.display = 'none';
+};
+
+// ══════════════════════════════════════════════════════════
+// BOOT
+// ══════════════════════════════════════════════════════════
+loadData();
+updateUserUI();
+
+if (!S.user) {
+  setTimeout(() => document.getElementById('auth-screen').classList.add('show'), 700);
+}
+</script>
+</body>
+</html>
